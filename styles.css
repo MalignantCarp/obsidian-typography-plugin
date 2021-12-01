@@ -1,4 +1,42 @@
-/* Sets all the text color to red! */
-body {
-    color: red;
+/*
+:root {
+    --typography-color-single-quote: hsl(170 50% 93%);
+    --typography-color-double-quote: hsl(140 50%  93%);
+    --typography-color-single-quote-unclosed: hsl(0 80% 93%);
+    --typography-color-double-quote-unclosed: hsl(0 60% 93%);
+}
+*/
+
+.theme-light {
+    --typography-color-single-quote-unclosed: var(--background-modifier-error);
+    --typography-color-double-quote-unclosed: var(--background-modifier-error);
+    --typography-color-single-quote: hsl(170 30% 23%);
+    --typography-color-double-quote: hsl(140 30%  23%);
+}
+
+.theme-dark {
+    --typography-color-single-quote: hsl(170 30% 93%);
+    --typography-color-double-quote: hsl(140 30%  93%);
+    --typography-color-single-quote-unclosed: var(--background-modifier-error);
+    --typography-color-double-quote-unclosed: var(--background-modifier-error);
+    /*
+    --typography-color-single-quote-unclosed: hsl(0 80% 93%);
+    --typography-color-double-quote-unclosed: hsl(0 60% 93%);
+    */
+}
+
+
+
+.singleQuote {
+    color: var(--typography-color-single-quote);
+}
+.doubleQuote {
+    color: var(--typography-color-double-quote);
+}
+
+.singleQuoteRunon {
+    color: var(--typography-color-single-quote-unclosed);
+}
+.doubleQuoteRunon {
+    color: var(--typography-color-double-quote-unclosed);
 }
