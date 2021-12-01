@@ -9,6 +9,7 @@ right double quote = &ldquo; = \u201D
 horizontal ellipsis = &hellip; = \u2026
 en-dash = &ndash; = \u2013
 em-dash = &mdash; = \u2014
+hair space = &hairsp; = \u200A
 */
 
 /* Simple apostrophe: \b'\b
@@ -36,7 +37,7 @@ const EraApo = (text:string = ''):string => {
 
 /* Full enclosing double quotes are easy: /"(.*?)"/ug
 */
-const DoubleQuotes = (text:string = '', style:boolean = false):string => {
+const DoubleQuotes = (text:string = '', style:boolean):string => {
     let start = '';
     let end = '';
     if (style) {
@@ -48,7 +49,7 @@ const DoubleQuotes = (text:string = '', style:boolean = false):string => {
 }
 
 // Once all other double quotes are done, we're left with the opening ones that don't end.
-const DoubleQuotesUnclosed = (text:string = '', style:boolean = false):string => {
+const DoubleQuotesUnclosed = (text:string = '', style:boolean):string => {
     let start = '';
     let end = '';
     if (style) {
@@ -66,7 +67,7 @@ There are a few expressions where we are likely to get correct single quotes.
 /^'(.*?)'$/ - whole paragraph encapsulation, no other ticks
 /\B'\b(.*?)\b'/ug - this should match most legitimate cases, but can return false positives
 */
-const SingleQuotes = (text:string = '', style:boolean = false):string => {
+const SingleQuotes = (text:string = '', style:boolean):string => {
 
     let start = '';
     let end = '';
@@ -75,8 +76,9 @@ const SingleQuotes = (text:string = '', style:boolean = false):string => {
         let end = '</span>';
     }
     text = text.replace(/'(\w+)'/ug, start + '\u2018$1\u2019' + end);
-    text = text.replace(/^'(.*?)'$/, start + '\u2018$1\u2019' + end)
-    let results = text.replace(/\B'\b(.*?)\b'/ug, start + '\u2018$1\u2019' + end)
+    //text = text.replace(/^'(.*?)'$/, start + '\u2018$1\u2019' + end);
+    let results = text.replace(/('(.*?\p{P})'|'(\P{P}*)')/ug, start + '\u2018$2$3\u2019' + end)
+    //let results = text.replace(/\B'\b(.*?)\b'/ug, start + '\u2018$1\u2019' + end)
     return results;
 }
 
@@ -87,7 +89,7 @@ function parseHTML(html:string) {
 }
 
 const Transform = (text:string, settings:TypographySettings) => {
-    console.log ("Input line: ", text, "<EOI>")
+    console.log ("Input line: ", text, "<<>>")
     //if (settings.apostrophes) {
         text = SimpleApo(text);
         text = EraApo(text);
@@ -99,12 +101,12 @@ const Transform = (text:string, settings:TypographySettings) => {
     //if (settings.singleQuotes) {
         text = SingleQuotes(text, settings.colorSingleQuotes);
     //}
-    text = text.replace("'", '\u2019')
-    text = text.replace(/(\s|\w|\p{P})---(\s|\w|\p{P})/ug, '$1\u2014$2') // em-dashes
-    text = text.replace(/(\s|\w|\p{P})--(\s|\w|\p{P})/ug, '$1\u2013$2') // en-dashes
+    text = text.replace(/'/ug, '\u2019')
+    text = text.replace(/(?<!&gt;|&lt;|<|>)---(?!&gt;|&lt;|<|>)/ug, '\u2014') // em-dashes
+    text = text.replace(/(?<!&gt;|&lt;|<|>)--(?!&gt;|&lt;|<|>)/ug, '\u2013') // en-dashes
     text = text.replace(/\.\.\./ug, '\u2026')
     let results = text;
-    console.log ("Transformation:", results, "<EOR>")
+    console.log ("Transformation:", results, "<<>>")
     return results;
 }
 
