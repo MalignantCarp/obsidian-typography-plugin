@@ -1,3 +1,13 @@
+/*
+:root {
+    --typography-color-single-hue: 20;
+    --typography-color-double-hue: 140;
+    --typography-color-saturation: 80%;
+    --typography-color-single-error-hue: 0;
+    --typography-color-double-error-hue: 0;
+}
+*/
+
 .theme-light {
     --typography-color-single-quote-unclosed: var(--background-modifier-error);
     --typography-color-double-quote-unclosed: var(--background-modifier-error);

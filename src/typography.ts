@@ -41,42 +41,8 @@ const HTML_HAIRSPACE = "&hairsp;";
 const OPEN_DOUBLE_SPAN = '<span class="doubleQuote">';
 const OPEN_SINGLE_SPAN = '<span class="singleQuote">';
 const OPEN_DOUBLE_SPAN_RUNON = '<span class="doubleQuoteRunon">';
+const OPEN_SINGLE_SPAN_RUNON = '<span class="singleQuoteRunon">';
 const CLOSE_SPAN = "</span>";
-
-
-/*
-
-FOR APOSTROPHES, WE ARE USING THE UNICODE CHARACTER INSTEAD OF THE HTML ELEMENT.
-IF WE CHOOSE TO HIGHLIGHT SINGLE QUOTED TEXT, THIS WILL ALLOW US TO DO SO.
-HOWEVER, IT WILL MOST LIKELY JUST SHOW US WHERE THE SEARCHES GET THINGS WRONG.
-
-*/
-
-/* Simple apostrophe: \b'\b
-
-Replaces any instance of letter characters separated by a single tick.
-
-*/
-
-const SimpleApo = (text: string = ''): string => {
-    let results = text.replace(/\b'\b/ug, UNI_SINGLE_CLOSE);
-    //console.log('Transform(', text, ')=>', results)
-    return results;
-};
-
-/* Era apostrophe, matches things like '80s and '90s wherever they occur:
-Only matches when a non-letter precedes the single tick to avoid possible issues with odd sci-fi names doob'00s.
-
-/\B'(\d0s)/
-*/
-
-const EraApo = (text: string = ''): string => {
-    let results = text.replace(/\B'(\d0s)/ug, UNI_SINGLE_CLOSE + '$1');
-    //console.log('Transform(', text, ')=>', results)
-    return results;
-};
-
-// Full enclosing double quotes are easy: /"(.*?)"/ug
 
 const FindSimpleApostrophes = (text: string): number[] => {
     let locations: number[] = [];
@@ -119,7 +85,10 @@ const FindSingleQuotes = (text: string): number[] => {
     */
     text = TransformSimpleApostrophes(text);
     let locations: number[] = [];
-    let finder = /('(\P{P}*)'|'(.*?\p{P})')/ug;
+    //let finder = /('(\P{P}*)'|'(.*?\p{P})')/ug;
+    //let finder = /(('.*?\p{P}')|('\P{P}*')|('.*?'))/ug;
+    //let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*'))/ug;
+    let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
     // console.log("Matching...")
     let match;
     while ((match = finder.exec(text)) !== null) {
@@ -157,13 +126,22 @@ const FindEllipses = (text: string): number[] => {
 
 const FindEnDashes = (text: string): number[] => {
     let locations: number[] = [];
-    let finder = /(?<!&gt;|&lt;|<|>|-)--(?!&gt;|&lt;|<|>|-)/ug;
+    let finder = /(?<!&gt;|&lt;|<|>|-|\d)--(?!&gt;|&lt;|<|>|-|\d)/ug;
     let match;
     while ((match = finder.exec(text)) !== null) {
         locations.push(match.index);
     }
     return locations;
+};
 
+const FindEnDashesBetweenNumbers = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /(?<=\d)--(?=\d)/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
 };
 
 const FindEmDashes = (text: string): number[] => {
@@ -177,34 +155,8 @@ const FindEmDashes = (text: string): number[] => {
 
 };
 
-const DoubleQuotes = (text: string): string => {
-    let results = text.replace(/"(.*?)"/ug, HTML_DOUBLE_OPEN + "$1" + HTML_DOUBLE_CLOSE);
-    return results;
-};
-
-// Once all other double quotes are done, we're left with the opening ones that don't end.
-// We use the unicode character here so we can search for it and replace it with the
-// HTML version once we've opened and closed our <span>
-
-const DoubleQuotesUnclosed = (text: string): string => {
-    let results = text.replace('"', UNI_DOUBLE_OPEN);
-    return results;
-};
-
-// There are a few expressions where we are likely to get correct single quotes.
-// /'(\w+)'/ug - single word encapsulation
-// /^'(.*?)'$/ - whole paragraph encapsulation, no other ticks
-// /\B'\b(.*?)\b'/ug - this should match most legitimate cases, but can return false positives
-// /('(.*?\p{P})'|'(\P{P}*)')/ug - better match for most proper-formed, but can return truncated entries
-
-const SingleQuotes = (text: string): string => {
-    text = text.replace(/'(\w+)'/ug, HTML_SINGLE_OPEN + '$1' + HTML_SINGLE_CLOSE);
-    let results = text.replace(/('(.*?\p{P})'|'(\P{P}*)')/ug, HTML_SINGLE_OPEN + '$2$3' + HTML_SINGLE_CLOSE);
-    return results;
-};
-
-
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
+    console.log("Parsing typography...");
     let innards = el.innerHTML;
     let tagFinder = /(<!--.*-->|<.*?>)/gums;
     let hasTags = tagFinder.test(innards);
@@ -287,6 +239,9 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     console.log("Finding en dashes...");
     let enDashes = FindEnDashes(rawText);
     console.log(enDashes);
+    console.log("Finding en dashes between numbers...");
+    let enDashesNum = FindEnDashesBetweenNumbers(rawText);
+    console.log(enDashesNum);
     console.log("Finding em dashes...");
     let emDashes = FindEmDashes(rawText);
     console.log(emDashes);
@@ -358,8 +313,14 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 } else if (singleQuotes.contains(checkIndex)) {
                     console.log("Matched character is a single quote (open? %s).", openSingle);
                     let style = "";
-                    if (settings.colorSingleQuotes) {
-                        style = openSingle ? CLOSE_SPAN : OPEN_SINGLE_SPAN;
+                    if (settings.colorSingleQuotes && openSingle) {
+                        style = CLOSE_SPAN;
+                    } else if (settings.colorSingleQuotes && singleQuotes[singleQuotes.length - 1] == checkIndex && singleQuotes.length % 2 != 0) {
+                        // if we are the last double quote and there are an uneven number, we are a runon
+                        // we color as normal unless we don't color the mismatches differently.
+                        style = settings.colorMismatchedSingleQuotes ? OPEN_SINGLE_SPAN_RUNON : OPEN_SINGLE_SPAN;
+                    } else if (settings.colorSingleQuotes) {
+                        style = OPEN_SINGLE_SPAN;
                     }
                     newInnards += openSingle ? HTML_SINGLE_CLOSE + style : style + HTML_SINGLE_OPEN;
                     openSingle = !openSingle;
@@ -376,9 +337,14 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     console.log("Matched character is an en-dash.");
                     newInnards += HTML_EN_DASH;
                     workingText = workingText.slice(2);
+                } else if (enDashesNum.contains(checkIndex)) {
+                    console.log("Matched an en-dash between numbers.");
+                    newInnards += HTML_HAIRSPACE + HTML_EN_DASH + HTML_HAIRSPACE;
+                    workingText = workingText.slice(2);
                 } else {
-                    console.log("Matched character is unknown:: %s<<[%s]>>%s", context, workingText[0], workingText.slice(1));
-                    break;
+                    console.log("False positive, passing to next character.");
+                    newInnards += workingText[0];
+                    workingText = workingText.slice(1);
                 }
             } else {
                 console.log("No matches on line. Adding text and clearing workingText.");
@@ -396,7 +362,11 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 console.log("Double quotes are open. Closing text span and adding remainder of original innards.");
                 newInnards += CLOSE_SPAN;
             }
-            console.log ("Spanning to end, adjusting cursor.")
+            if (openSingle && settings.colorMismatchedSingleQuotes) {
+                console.log("Single quotes are open. Closing text span and adding remainder of original innards.");
+                newInnards += CLOSE_SPAN;
+            }
+            console.log("Spanning to end, adjusting cursor.");
             newInnards += innards.slice(textEnd);
             originalCursor = fullLength;
         } else {
@@ -404,21 +374,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
             originalCursor = textEnd;
         }
     }
-
-    el.innerHTML = newInnards;
-
-    /*
-    console.log(el.childNodes)
-    Traverse(el, settings);
-    console.log ("Input line: ", text, "<EOI>")
-    text = SimpleApo(text);
-    text = EraApo(text);
-    text  = DoubleQuotes(text);
-    text = DoubleQuotesUnclosed(text);
-    let results = text;
-    console.log ("Transformation:", results, "<EOR>")
-    return results;
-    */
+    return newInnards;
 };
 
 export { Typography as typography };

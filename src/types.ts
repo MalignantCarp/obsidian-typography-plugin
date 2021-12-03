@@ -7,4 +7,5 @@ export interface TypographySettings {
     colorDoubleQuotes: boolean;
     colorMismatchedDoubleQuotes: boolean;
     colorSingleQuotes: boolean;
+    colorMismatchedSingleQuotes: boolean;
 }
