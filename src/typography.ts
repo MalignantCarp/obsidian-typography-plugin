@@ -38,6 +38,12 @@ const HTML_EM_DASH = "&mdash;";
 
 const HTML_HAIRSPACE = "&hairsp;";
 
+const OPEN_DOUBLE_SPAN = '<span class="doubleQuote">';
+const OPEN_SINGLE_SPAN = '<span class="singleQuote">';
+const OPEN_DOUBLE_SPAN_RUNON = '<span class="doubleQuoteRunon">';
+const CLOSE_SPAN = "</span>";
+
+
 /*
 
 FOR APOSTROPHES, WE ARE USING THE UNICODE CHARACTER INSTEAD OF THE HTML ELEMENT.
@@ -72,19 +78,118 @@ const EraApo = (text: string = ''): string => {
 
 // Full enclosing double quotes are easy: /"(.*?)"/ug
 
-const DoubleQuotes = (text:string):string => {
+const FindSimpleApostrophes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d))/gmu;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const TransformSimpleApostrophes = (text: string): string => {
+    // console.log ("Transforming simple apostrophes...");
+    return text.replace(/((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d))/gmu, UNI_DOUBLE_CLOSE);
+};
+
+const FindDoubleQuotes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /"/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const FindSingleQuotes = (text: string): number[] => {
+    /* This is slightly more complicated because we can't just search for the single quote and
+    then see what precedes and what succeeds it; we require more context, so we can't use
+    lookahead/lookbehind and will instead have to grab the indexes and iterate manually
+    through text.
+
+    The logic for using open or closing will still be able to follow identically the open
+    and closing for double quotes, so we will be able to apply the <span>s appropriately,
+    but there won't be any run-ons because we are going to be finding pairs only.
+
+    Before we start, we need to make sure we aren't matching other apostrophes that should
+    have been transformed already, so we convert them to unicode close single quote before we
+    run our new search.
+    */
+    text = TransformSimpleApostrophes(text);
+    let locations: number[] = [];
+    let finder = /('(\P{P}*)'|'(.*?\p{P})')/ug;
+    // console.log("Matching...")
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        // console.log ("Match found, [%s] @ %d%s%d", text.slice(match.index, finder.lastIndex), match.index, UNI_EN_DASH, finder.lastIndex);
+        locations.push(match.index, finder.lastIndex - 1);
+    }
+    return locations;
+};
+
+const FindRemainingApostrophes = (text: string, ignore: number[]): number[] => {
+    // ignore = the results from FindSingleQuotes
+    let apos: number[] = [];
+
+    text = TransformSimpleApostrophes(text);
+    let finder = /'/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        apos.push(match.index);
+    }
+    // we only return the matches that are not already included in the find single quotes matches
+    let locations = apos.filter(x => !ignore.includes(x));
+    return locations;
+};
+
+const FindEllipses = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /\.\.\./ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+
+};
+
+const FindEnDashes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /(?<!&gt;|&lt;|<|>|-)--(?!&gt;|&lt;|<|>|-)/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+
+};
+
+const FindEmDashes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /(?<!&gt;|&lt;|<|>|-)---(?!&gt;|&lt;|<|>|-)/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+
+};
+
+const DoubleQuotes = (text: string): string => {
     let results = text.replace(/"(.*?)"/ug, HTML_DOUBLE_OPEN + "$1" + HTML_DOUBLE_CLOSE);
     return results;
-}
+};
 
 // Once all other double quotes are done, we're left with the opening ones that don't end.
 // We use the unicode character here so we can search for it and replace it with the
 // HTML version once we've opened and closed our <span>
 
-const DoubleQuotesUnclosed = (text:string):string => {
+const DoubleQuotesUnclosed = (text: string): string => {
     let results = text.replace('"', UNI_DOUBLE_OPEN);
     return results;
-}
+};
 
 // There are a few expressions where we are likely to get correct single quotes.
 // /'(\w+)'/ug - single word encapsulation
@@ -92,47 +197,15 @@ const DoubleQuotesUnclosed = (text:string):string => {
 // /\B'\b(.*?)\b'/ug - this should match most legitimate cases, but can return false positives
 // /('(.*?\p{P})'|'(\P{P}*)')/ug - better match for most proper-formed, but can return truncated entries
 
-const SingleQuotes = (text:string):string => {
+const SingleQuotes = (text: string): string => {
     text = text.replace(/'(\w+)'/ug, HTML_SINGLE_OPEN + '$1' + HTML_SINGLE_CLOSE);
-    let results = text.replace(/('(.*?\p{P})'|'(\P{P}*)')/ug, HTML_SINGLE_OPEN + '$2$3' + HTML_SINGLE_CLOSE)
+    let results = text.replace(/('(.*?\p{P})'|'(\P{P}*)')/ug, HTML_SINGLE_OPEN + '$2$3' + HTML_SINGLE_CLOSE);
     return results;
-}
+};
 
 
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
-    /*
-        console.log("Root element is <%s> with %d child(ren):", el.tagName, el.children.length);
-        // We want to separately run through any non-paragraph elements
-        if (el.children.length > 0 && !matchTags.contains(el.tagName)) {
-            for (var i = 0; i < el.children.length; i++) {
-                // console.log(el.children[i].outerHTML);
-                // console.log("Parsing child...");
-                Typography(el.children[i], settings);
-            }
-        }
-     */
-    /*
-    One thing we can definitely do first is run the simple apostrophe replacements,
-    as they are not likely to be causing any trouble whatsoever and are necessary to
-    clear up some possible mismatches later on while trying to nail down opening single
-    quotes. The only time we're going to be able to fully and automatically replace the
-    standard straight ' character with a single closing quote is when it is between two
-    word boundaries, so we are okay to proceed always.
-
-    We can also test for the date-based apostrophe, because Obsidian and/or Electron only
-    use quotation marks around tag attributes, so there should be no instances of something
-    like: <span style='80s'>Blah blah blah</span>
-    */
-
     let innards = el.innerHTML;
-    innards = SimpleApo(innards);
-    innards = EraApo(innards);
-
-    /*
-    We now need to find a way to traverse our text to not end up in tags. So we need to find
-    all tag boundaries.
-    */
-
     let tagFinder = /(<!--.*-->|<.*?>)/gums;
     let hasTags = tagFinder.test(innards);
     let boundaries: number[] = [];
@@ -196,61 +269,140 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     }
     console.log("Concat: [%s]", rawText);
 
-
-    rawText = DoubleQuotes(rawText);
-    rawText = DoubleQuotesUnclosed(rawText); // this using the unicode char to allow us to spot the unclosed.
-    rawText = SingleQuotes(rawText);
-    rawText = rawText.replace(/'/ug, UNI_SINGLE_CLOSE); // since this is an apostrophe, we are using the unicode character, see note at top
-    rawText = rawText.replace(/(?<!&gt;|&lt;|<|>)---(?!&gt;|&lt;|<|>)/ug, HTML_EM_DASH); // em-dashes
-    rawText = rawText.replace(/(?<!&gt;|&lt;|<|>)--(?!&gt;|&lt;|<|>)/ug, HTML_EN_DASH); // en-dashes
-    rawText = rawText.replace(/\.\.\./ug, HTML_HORIZ_ELLIPSIS);
+    console.log("Finding simple apostrophes...");
+    let simpleApostrophes = FindSimpleApostrophes(rawText);
+    console.log(simpleApostrophes);
+    console.log("Finding Double Quotes...");
+    let doubleQuotes = FindDoubleQuotes(rawText);
+    console.log(doubleQuotes);
+    console.log("Finding Single Quotes");
+    let singleQuotes = FindSingleQuotes(rawText);
+    console.log(singleQuotes);
+    console.log("Finding final apostrophes...");
+    let finalApostrophes = FindRemainingApostrophes(rawText, singleQuotes);
+    console.log(finalApostrophes);
+    console.log("Finding ellipses...");
+    let ellipses = FindEllipses(rawText);
+    console.log(ellipses);
+    console.log("Finding en dashes...");
+    let enDashes = FindEnDashes(rawText);
+    console.log(enDashes);
+    console.log("Finding em dashes...");
+    let emDashes = FindEmDashes(rawText);
+    console.log(emDashes);
 
     /*
-    Now we need to reconsistute our raw text into the tagged version. We have the original boundaries for the tags,
-    we have the original tags, and we have the text boundaries, so we know where in the string the boundaries go.
-    We also know the length of the tags (and can easily obtain them with a regex if need be)
-
-    /(&\w+;)
-
-    Our first step is finding out if we are laying down any tags to start. While our tag boundaries are less than
-    our slice boundaries, we can go ahead and just lay down the tags and proceed through boundaries until we find
-    the point at which we can start adding in our text slices. We will then obtain the original text slice
-    and grab the new slice (based on the cursor offset). If the two strings match, we can just lay the text in.
-    If the text does not match, we need to adjust our cursor offset. To do that, we need to find out at what
-    point the text stops matching by searching for our HTML entities.
-
-    Now, theoretically, some entities could already exist, so it's a matter of obtaining the index and then doing
-    a quick match with the original text to see if it matches, if so, we can move on to the next match. Once we find
-    the point of divergence, we adjust the cursor and continue to lay down the text, moving along the text until
-    we reach the end of the current text boundary.
+    Now we need to create newInnards based on the tags and raw text:
+    
+    Step our cursor to the first available text character. Add to our newInnards any tag information that comes up
+    before the first text character. Now, run a simple regex search for ('|"|-) - the three characters we are replacing.
+    If nothing is found, attach all of the original text and move on to the next. If we find one, we check our lists:
+    is it an apostrophe? Go ahead and just put in HTML_SINGLE_CLOSE. Is it a quotation mark? If doubleQuoteOpen, do
+    HTML_DOUBLE_CLOSE, otherwise do HTML_DOUBLE_OPEN. If we are highlighting, then in the first case, also add </span>;
+    in the latter, add <span class="doubleQuote">, but only if there is another quotation mark in the list, otherwise use
+    doubleQuoteRunon. If we're at the end of the text and doubleQuoteOpen, add </span> to close the runon if that setting
+    is enabled. Do likewise for single quotes.
 
     */
-
-    let cursor = 0;
-    let boundIndex = 0;
-    let offset = 0;
     let newInnards = "";
-    let rtStart = 0;
-    let rtEnd = rawText.length;
-    // There should always be tag boundaries, but just in case...
-    if (boundaries.length > 0) {
-        for (var i = 0; i < slices.length; i += 2) {
-            let bStart = boundaries[boundIndex];
-            let bEnd = boundaries[boundIndex+1];
-            let tStart = slices[i];
-            let tEnd = slices[i+1];
+    let originalCursor = 0;
+    let openDouble = false;
+    let openSingle = false;
+    let indexT = 0;
+    let target = /("|'|\.\.\.|---|--)/gum;
+    let offset = 0;
+    let fullLength = innards.length;
 
+    while (originalCursor < fullLength) {
+        console.log("Start loop with originalCursor@%d", originalCursor);
+        let isAtTextEnd = indexT + 2 >= slices.length;
+        let textStart = slices[indexT];
+        let textEnd = slices[indexT + 1];
+        indexT += 2;
+        console.log("Adjusting cursor from %d to %d and copying in original text for that range: [%s]", originalCursor, textStart, innards.slice(originalCursor, textStart));
+        newInnards += innards.slice(originalCursor, textStart);
+        originalCursor = textStart;
+        let workingText = innards.slice(textStart, textEnd);
+        let textOffset = offset;
+        console.log("Text needs processing: [%s] (%d-%d) with offset %d (at end? %s) and textOffset %d", workingText, textStart, textEnd, offset, isAtTextEnd, textOffset);
+        while (workingText.length > 0) {
+            let textLen = workingText.length;
+            let firstIndex = workingText.search(target);
+            let checkIndex = firstIndex + textOffset;
+            console.log("Working text is [%s] (len=%d), with match at %d (checking %d as offset is %d)", workingText, textLen, firstIndex, checkIndex, textOffset);
+            if (firstIndex >= 0) {
+                console.log("Adding [%s] to new inner HTML block.", workingText.slice(0, firstIndex));
+                console.log("Our matched character is [%s]", workingText[firstIndex]);
+                let context = workingText.slice(0, firstIndex);;
+                newInnards += context;
+                workingText = workingText.slice(firstIndex);
+                if (simpleApostrophes.contains(checkIndex) || finalApostrophes.contains(checkIndex)) {
+                    console.log("Matched character is an apostrophe.");
+                    newInnards += HTML_SINGLE_CLOSE;
+                    workingText = workingText.slice(1);
+                } else if (doubleQuotes.contains(checkIndex)) {
+                    console.log("Matched character is a double quote (open? %s).", openDouble);
+                    let style = "";
+                    if (settings.colorDoubleQuotes && openDouble) {
+                        style = CLOSE_SPAN;
+                    } else if (settings.colorDoubleQuotes && doubleQuotes[doubleQuotes.length - 1] == checkIndex && doubleQuotes.length % 2 != 0) {
+                        // if we are the last double quote and there are an uneven number, we are a runon
+                        // we color as normal unless we don't color the mismatches differently.
+                        style = settings.colorMismatchedDoubleQuotes ? OPEN_DOUBLE_SPAN_RUNON : OPEN_DOUBLE_SPAN;
+                    } else if (settings.colorDoubleQuotes) {
+                        style = OPEN_DOUBLE_SPAN;
+                    }
+                    newInnards += openDouble ? HTML_DOUBLE_CLOSE + style : style + HTML_DOUBLE_OPEN;
+                    openDouble = !openDouble;
+                    workingText = workingText.slice(1);
+                } else if (singleQuotes.contains(checkIndex)) {
+                    console.log("Matched character is a single quote (open? %s).", openSingle);
+                    let style = "";
+                    if (settings.colorSingleQuotes) {
+                        style = openSingle ? CLOSE_SPAN : OPEN_SINGLE_SPAN;
+                    }
+                    newInnards += openSingle ? HTML_SINGLE_CLOSE + style : style + HTML_SINGLE_OPEN;
+                    openSingle = !openSingle;
+                    workingText = workingText.slice(1);
+                } else if (ellipses.contains(checkIndex)) {
+                    console.log("Matched character is a horizontal ellipsis.");
+                    newInnards += HTML_HORIZ_ELLIPSIS;
+                    workingText = workingText.slice(3);
+                } else if (emDashes.contains(checkIndex)) {
+                    console.log("Matched character is an em-dash.");
+                    newInnards += HTML_EM_DASH;
+                    workingText = workingText.slice(3);
+                } else if (enDashes.contains(checkIndex)) {
+                    console.log("Matched character is an en-dash.");
+                    newInnards += HTML_EN_DASH;
+                    workingText = workingText.slice(2);
+                } else {
+                    console.log("Matched character is unknown:: %s<<[%s]>>%s", context, workingText[0], workingText.slice(1));
+                    break;
+                }
+            } else {
+                console.log("No matches on line. Adding text and clearing workingText.");
+                newInnards += workingText;
+                originalCursor = textEnd;
+                workingText = "";
+            }
+            console.log("Adjusting textOffset(%d) += %d - %d = %d", textOffset, textLen, workingText.length, textLen - workingText.length);
+            textOffset += textLen - workingText.length;
         }
-    } else {
-        newInnards = rawText;
-        textEnd = newInnards.length;
-    }
-
-    newInnards.replace(/(&ldquo;)(.*?)(&rdquo;)/ug, '<span class="doubleQuote">$1$2$3</span>');
-    let dqRunon = newInnards.contains(UNI_DOUBLE_OPEN);
-    newInnards.replace(UNI_DOUBLE_OPEN, '<span class="doubleQuoteRunon">' + HTML_DOUBLE_OPEN);
-    if (dqRunon) {
-        newInnards = newInnards.slice(0, textEnd) + "</span>" + newInnards.slice(textEnd);
+        console.log("Adjusting offset (%d) += %d - %d = %d", offset, textEnd, textStart, offset + (textEnd - textStart));
+        offset += textEnd - textStart;
+        if (isAtTextEnd) {
+            if (openDouble && settings.colorMismatchedDoubleQuotes) {
+                console.log("Double quotes are open. Closing text span and adding remainder of original innards.");
+                newInnards += CLOSE_SPAN;
+            }
+            console.log ("Spanning to end, adjusting cursor.")
+            newInnards += innards.slice(textEnd);
+            originalCursor = fullLength;
+        } else {
+            console.log("Adjusting original cursor from %d to %d.", originalCursor, textEnd);
+            originalCursor = textEnd;
+        }
     }
 
     el.innerHTML = newInnards;
