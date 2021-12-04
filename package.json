@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-plugin-typography",
+	"name": "obsidian-typography-plugin",
 	"version": "0.0.1",
 	"description": "This is a plugin for Obsidian that produces advanced typography in the preview window.",
 	"main": "main.js",

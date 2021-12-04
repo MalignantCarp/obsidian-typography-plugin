@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-plugin-typography",
+	"id": "obsidian-typography-plugin",
 	"name": "Obsidian Typography Plugin",
 	"version": "0.0.1",
 	"minAppVersion": "0.12.0",
 	"description": "This is a plugin for Obsidian (https://obsidian.md) that produces advanced typography in the preview window.",
 	"author": "Ryan Fitzgerald",
-	"authorUrl": "https://github.com/MalignantCarp/obsidian-plugin-typography",
+	"authorUrl": "https://github.com/MalignantCarp/obsidian-typography-plugin",
 	"isDesktopOnly": false
 }

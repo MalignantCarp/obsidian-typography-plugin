@@ -46,7 +46,7 @@ const CLOSE_SPAN = "</span>";
 
 const FindSimpleApostrophes = (text: string): number[] => {
     let locations: number[] = [];
-    let finder = /((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d))/gmu;
+    let finder = /((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu;
     let match;
     while ((match = finder.exec(text)) !== null) {
         locations.push(match.index);
@@ -56,7 +56,7 @@ const FindSimpleApostrophes = (text: string): number[] => {
 
 const TransformSimpleApostrophes = (text: string): string => {
     // console.log ("Transforming simple apostrophes...");
-    return text.replace(/((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d))/gmu, UNI_DOUBLE_CLOSE);
+    return text.replace(/((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu, UNI_SINGLE_CLOSE);
 };
 
 const FindDoubleQuotes = (text: string): number[] => {
@@ -70,30 +70,24 @@ const FindDoubleQuotes = (text: string): number[] => {
 };
 
 const FindSingleQuotes = (text: string): number[] => {
-    /* This is slightly more complicated because we can't just search for the single quote and
-    then see what precedes and what succeeds it; we require more context, so we can't use
-    lookahead/lookbehind and will instead have to grab the indexes and iterate manually
-    through text.
-
-    The logic for using open or closing will still be able to follow identically the open
-    and closing for double quotes, so we will be able to apply the <span>s appropriately,
-    but there won't be any run-ons because we are going to be finding pairs only.
-
+    /*
     Before we start, we need to make sure we aren't matching other apostrophes that should
     have been transformed already, so we convert them to unicode close single quote before we
     run our new search.
     */
     text = TransformSimpleApostrophes(text);
     let locations: number[] = [];
-    //let finder = /('(\P{P}*)'|'(.*?\p{P})')/ug;
-    //let finder = /(('.*?\p{P}')|('\P{P}*')|('.*?'))/ug;
-    //let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*'))/ug;
+
+    // this will match most single quote blocks and run-ons
     let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
+
     // console.log("Matching...")
     let match;
     while ((match = finder.exec(text)) !== null) {
-        // console.log ("Match found, [%s] @ %d%s%d", text.slice(match.index, finder.lastIndex), match.index, UNI_EN_DASH, finder.lastIndex);
-        locations.push(match.index, finder.lastIndex - 1);
+        let matchText = text.slice(match.index, finder.lastIndex);
+        console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
+        locations.push(match.index);
+        if (matchText[matchText.length - 1] == "'") {locations.push(finder.lastIndex-1)};
     }
     return locations;
 };
@@ -311,7 +305,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     openDouble = !openDouble;
                     workingText = workingText.slice(1);
                 } else if (singleQuotes.contains(checkIndex)) {
-                    console.log("Matched character is a single quote (open? %s).", openSingle);
+                    console.log("Matched character is a single quote (open? %s; %d/%d).", openSingle, singleQuotes.indexOf(checkIndex), singleQuotes.length);
                     let style = "";
                     if (settings.colorSingleQuotes && openSingle) {
                         style = CLOSE_SPAN;

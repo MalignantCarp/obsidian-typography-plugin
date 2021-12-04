@@ -1,41 +1,62 @@
-/*
+
 :root {
     --typography-color-single-hue: 20;
-    --typography-color-double-hue: 140;
-    --typography-color-saturation: 80%;
+    --typography-color-double-hue: 120;
+    --typography-color-saturation: 90%;
     --typography-color-single-error-hue: 0;
     --typography-color-double-error-hue: 0;
+    --typography-border-opacity: 15%;
+    --typography-bgcolor-opacity: 5%;
 }
-*/
+
 
 .theme-light {
-    --typography-color-single-quote-unclosed: var(--background-modifier-error);
-    --typography-color-double-quote-unclosed: var(--background-modifier-error);
-    --typography-color-single-quote: hsl(20, 80%, 20%);
-    --typography-color-double-quote: hsl(140, 80%,  20%);
+    --typography-color-single-quote-lightness: 25%;
+    --typography-color-double-quote-lightness: 25%;
+    --typography-bgcolor-single-quote-lightness: 90%;
+    --typography-bgcolor-double-quote-lightness: 90%;
+    --typography-error-lightness: 35%;
 }
 
 .theme-dark {
-    --typography-color-single-quote: hsl(20, 80%, 85%);
-    --typography-color-double-quote: hsl(140, 80%,  85%);
-    --typography-color-single-quote-unclosed: var(--background-modifier-error);
-    --typography-color-double-quote-unclosed: var(--background-modifier-error);
-    /*
-    --typography-color-single-quote-unclosed: hsl(0 80% 93%);
-    --typography-color-double-quote-unclosed: hsl(0 60% 93%);
-    */
+    --typography-color-single-quote-lightness: 85%;
+    --typography-color-double-quote-lightness: 85%;
+    --typography-bgcolor-single-quote-lightness: 10%;
+    --typography-bgcolor-double-quote-lightness: 10%;
+}
+
+.singleQuote, .doubleQuote, .singleQuoteRunon, .doubleQuoteRunon {
+    border-radius: 0.25em;
+    border: 1px dashed;
+}
+
+.singleQuote .doubleQuote {
+    border: 1px dotted;
+}
+
+.doubleQuote .singleQuote {
+    border: 1px dotted;
 }
 
 .singleQuote {
-    color: var(--typography-color-single-quote);
+    color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness));
+    border-color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness), var(--typography-border-opacity));
+    background-color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-bgcolor-single-quote-lightness), var(--typography-bgcolor-opacity));
 }
 .doubleQuote {
-    color: var(--typography-color-double-quote);
+    color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness));
+    border-color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness), var(--typography-border-opacity));
+    background-color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-bgcolor-double-quote-lightness), var(--typography-bgcolor-opacity));
 }
 
 .singleQuoteRunon {
-    color: var(--typography-color-single-quote-unclosed);
+    color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness));
+    border-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness), var(--typography-border-opacity));
+    background-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-single-quote-lightness), var(--typography-bgcolor-opacity));
 }
+
 .doubleQuoteRunon {
-    color: var(--typography-color-double-quote-unclosed);
+    color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness));
+    border-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness), var(--typography-border-opacity));
+    background-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-double-quote-lightness), var(--typography-bgcolor-opacity));
 }
