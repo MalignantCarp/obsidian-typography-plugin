@@ -5,8 +5,8 @@
     --typography-color-saturation: 90%;
     --typography-color-single-error-hue: 0;
     --typography-color-double-error-hue: 0;
-    --typography-border-opacity: 15%;
-    --typography-bgcolor-opacity: 5%;
+    --typography-border-opacity: 25%;
+    --typography-bgcolor-opacity: 12.5%;
 }
 
 
@@ -23,10 +23,11 @@
     --typography-color-double-quote-lightness: 85%;
     --typography-bgcolor-single-quote-lightness: 10%;
     --typography-bgcolor-double-quote-lightness: 10%;
+    --typography-error-lightness: 70%;
 }
 
 .singleQuote, .doubleQuote, .singleQuoteRunon, .doubleQuoteRunon {
-    border-radius: 0.25em;
+    border-radius: 0.3em;
     border: 1px dashed;
 }
 
@@ -50,13 +51,13 @@
 }
 
 .singleQuoteRunon {
-    color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness));
-    border-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness), var(--typography-border-opacity));
+    color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-error-lightness));
+    border-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-error-lightness), var(--typography-border-opacity));
     background-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-single-quote-lightness), var(--typography-bgcolor-opacity));
 }
 
 .doubleQuoteRunon {
-    color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness));
-    border-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness), var(--typography-border-opacity));
+    color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-error-lightness));
+    border-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-error-lightness), var(--typography-border-opacity));
     background-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-double-quote-lightness), var(--typography-bgcolor-opacity));
 }

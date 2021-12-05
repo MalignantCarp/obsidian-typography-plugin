@@ -19,7 +19,7 @@ export default class TypographyPlugin extends Plugin {
     settings: TypographySettings;
 
     public postprocessor: MarkdownPostProcessor = (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-        console.log('Post processor called.');
+        // console.log('Post processor called.');
         //const source = el.innerHTML
         //console.log ("Element is ", el.tagName)
         let typograph = typography(el, this.settings);

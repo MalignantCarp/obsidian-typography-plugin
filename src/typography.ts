@@ -75,8 +75,64 @@ const FindSingleQuotes = (text: string): number[] => {
     have been transformed already, so we convert them to unicode close single quote before we
     run our new search.
     */
+    // console.log("[%s]",text);
     text = TransformSimpleApostrophes(text);
+    // console.log(">[%s]",text);
     let locations: number[] = [];
+
+/*
+
+Working on a new algorithm. The following will match only closing single quotes. Not all of them, but most:
+
+/('(?= )|'$|(?<=\p{P})'(?=\p{P}))/gmu
+
+And this does open quotes:
+/('(?=(?:\p{L}|\u2019| )*?')|'(?=.*?\p{P}'))/gmu
+
+Again, not all of them, but most. It does fall for 'twas if it is inside quotation marks.
+Probably an idea to parse things in quotation marks individually.
+
+    let closeFinder = /('(?= )|'$|(?<=\p{P})'(?=\p{P}))/gmu;
+    let openFinder = /(?:^|(?<=\s))'(?=(?:\p{L}|\u2019)*?')|(?:^|(?<=\s))'(?=.*?\p{P}')/gmu;
+    let blockFinder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
+
+
+The new algorithm has no way of termining if something is an opening quote without something that follows giving it a clue.
+
+As such, combining the results of the two algorithms may allow us to make the determination. We will need to walk through
+the original results, basically filtering out closing/opening based on the two separate lists from the above regexes.
+That will probably yield the best result.
+
+Still need to find an adequate way to match opening single quotes. If I can find a way that catches all legitimate
+open quotes, then the remainders can be caught by the Final Apostrophes.
+
+--------------
+
+So our biggest issue is nesting of quotation marks, parentheses, backets, and braces. That is our biggest issue with parsing
+this text. We are going to have to iterate over the entire string recursively processing based on where we find what.
+
+The simple rules:
+
+An opening single quote may:
+* Be at the start of the line
+* Follow whitespace
+* Follow opening nesting characters (e.g., parentheses, brackets, braces, chevrons, double quotes)
+
+An opening single quote may NOT:
+* Follow a letter
+* Follow a sentence separator
+* Be at the end of a line
+
+A closing single quote may:
+* Be found at the start of a line
+* Be found after a sentence separator (at the end of a line or followed by a space)
+* Be found at the end of a line
+* Be found preceding a letter or other word character (including digits)
+
+A closing single quote may NOT:
+* ?
+
+*/
 
     // this will match most single quote blocks and run-ons
     let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
@@ -85,7 +141,7 @@ const FindSingleQuotes = (text: string): number[] => {
     let match;
     while ((match = finder.exec(text)) !== null) {
         let matchText = text.slice(match.index, finder.lastIndex);
-        console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
+        //console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
         locations.push(match.index);
         if (matchText[matchText.length - 1] == "'") {locations.push(finder.lastIndex-1)};
     }
@@ -150,9 +206,9 @@ const FindEmDashes = (text: string): number[] => {
 };
 
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
-    console.log("Parsing typography...");
+    // console.log("Parsing typography...");
     let innards = el.innerHTML;
-    let tagFinder = /(<!--.*-->|<.*?>)/gums;
+    let tagFinder = /(<!--.*-->|<pre.*?>.*?<\/pre>|<.*?>)/gums;
     let hasTags = tagFinder.test(innards);
     let boundaries: number[] = [];
     let tags = innards.match(tagFinder);
@@ -204,41 +260,44 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
             }
         }
     }
-
+    // if there's no text to parse, we don't need to waste any time going through the motions.
+    if (slices.length == 0) {
+        return innards;
+    }
     // console.log("Slices:", slices)
     let rawText = "";
     for (var i = 0; i < slices.length; i += 2) {
         let from = slices[i];
         let to = slices[i + 1];
-        console.log("Slice(%d, %d): [%s]", from, to, innards.slice(from, to));
+        // console.log("Slice(%d, %d): [%s]", from, to, innards.slice(from, to));
         rawText += innards.slice(from, to);
     }
-    console.log("Concat: [%s]", rawText);
+    // console.log("Concat: [%s]", rawText);
 
-    console.log("Finding simple apostrophes...");
+    // console.log("Finding simple apostrophes...");
     let simpleApostrophes = FindSimpleApostrophes(rawText);
-    console.log(simpleApostrophes);
-    console.log("Finding Double Quotes...");
+    // console.log(simpleApostrophes);
+    // console.log("Finding Double Quotes...");
     let doubleQuotes = FindDoubleQuotes(rawText);
-    console.log(doubleQuotes);
-    console.log("Finding Single Quotes");
+    // console.log(doubleQuotes);
+    // console.log("Finding Single Quotes");
     let singleQuotes = FindSingleQuotes(rawText);
-    console.log(singleQuotes);
-    console.log("Finding final apostrophes...");
+    // console.log(singleQuotes);
+    // console.log("Finding final apostrophes...");
     let finalApostrophes = FindRemainingApostrophes(rawText, singleQuotes);
-    console.log(finalApostrophes);
-    console.log("Finding ellipses...");
+    // console.log(finalApostrophes);
+    // console.log("Finding ellipses...");
     let ellipses = FindEllipses(rawText);
-    console.log(ellipses);
-    console.log("Finding en dashes...");
+    // console.log(ellipses);
+    // console.log("Finding en dashes...");
     let enDashes = FindEnDashes(rawText);
-    console.log(enDashes);
-    console.log("Finding en dashes between numbers...");
+    // console.log(enDashes);
+    // console.log("Finding en dashes between numbers...");
     let enDashesNum = FindEnDashesBetweenNumbers(rawText);
-    console.log(enDashesNum);
-    console.log("Finding em dashes...");
+    // console.log(enDashesNum);
+    // console.log("Finding em dashes...");
     let emDashes = FindEmDashes(rawText);
-    console.log(emDashes);
+    // console.log(emDashes);
 
     /*
     Now we need to create newInnards based on the tags and raw text:
@@ -263,34 +322,34 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     let fullLength = innards.length;
 
     while (originalCursor < fullLength) {
-        console.log("Start loop with originalCursor@%d", originalCursor);
+        // console.log("Start loop with originalCursor@%d", originalCursor);
         let isAtTextEnd = indexT + 2 >= slices.length;
         let textStart = slices[indexT];
         let textEnd = slices[indexT + 1];
         indexT += 2;
-        console.log("Adjusting cursor from %d to %d and copying in original text for that range: [%s]", originalCursor, textStart, innards.slice(originalCursor, textStart));
+        // console.log("Adjusting cursor from %d to %d and copying in original text for that range: [%s]", originalCursor, textStart, innards.slice(originalCursor, textStart));
         newInnards += innards.slice(originalCursor, textStart);
         originalCursor = textStart;
         let workingText = innards.slice(textStart, textEnd);
         let textOffset = offset;
-        console.log("Text needs processing: [%s] (%d-%d) with offset %d (at end? %s) and textOffset %d", workingText, textStart, textEnd, offset, isAtTextEnd, textOffset);
+        // console.log("Text needs processing: [%s] (%d-%d) with offset %d (at end? %s) and textOffset %d", workingText, textStart, textEnd, offset, isAtTextEnd, textOffset);
         while (workingText.length > 0) {
             let textLen = workingText.length;
             let firstIndex = workingText.search(target);
             let checkIndex = firstIndex + textOffset;
-            console.log("Working text is [%s] (len=%d), with match at %d (checking %d as offset is %d)", workingText, textLen, firstIndex, checkIndex, textOffset);
+            // console.log("Working text is [%s] (len=%d), with match at %d (checking %d as offset is %d)", workingText, textLen, firstIndex, checkIndex, textOffset);
             if (firstIndex >= 0) {
-                console.log("Adding [%s] to new inner HTML block.", workingText.slice(0, firstIndex));
-                console.log("Our matched character is [%s]", workingText[firstIndex]);
+                // console.log("Adding [%s] to new inner HTML block.", workingText.slice(0, firstIndex));
+                // console.log("Our matched character is [%s]", workingText[firstIndex]);
                 let context = workingText.slice(0, firstIndex);;
                 newInnards += context;
                 workingText = workingText.slice(firstIndex);
                 if (simpleApostrophes.contains(checkIndex) || finalApostrophes.contains(checkIndex)) {
-                    console.log("Matched character is an apostrophe.");
+                    // console.log("Matched character is an apostrophe.");
                     newInnards += HTML_SINGLE_CLOSE;
                     workingText = workingText.slice(1);
                 } else if (doubleQuotes.contains(checkIndex)) {
-                    console.log("Matched character is a double quote (open? %s).", openDouble);
+                    // console.log("Matched character is a double quote (open? %s).", openDouble);
                     let style = "";
                     if (settings.colorDoubleQuotes && openDouble) {
                         style = CLOSE_SPAN;
@@ -305,7 +364,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     openDouble = !openDouble;
                     workingText = workingText.slice(1);
                 } else if (singleQuotes.contains(checkIndex)) {
-                    console.log("Matched character is a single quote (open? %s; %d/%d).", openSingle, singleQuotes.indexOf(checkIndex), singleQuotes.length);
+                    // console.log("Matched character is a single quote (open? %s; %d/%d).", openSingle, singleQuotes.indexOf(checkIndex), singleQuotes.length);
                     let style = "";
                     if (settings.colorSingleQuotes && openSingle) {
                         style = CLOSE_SPAN;
@@ -320,51 +379,51 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     openSingle = !openSingle;
                     workingText = workingText.slice(1);
                 } else if (ellipses.contains(checkIndex)) {
-                    console.log("Matched character is a horizontal ellipsis.");
+                    // console.log("Matched character is a horizontal ellipsis.");
                     newInnards += HTML_HORIZ_ELLIPSIS;
                     workingText = workingText.slice(3);
                 } else if (emDashes.contains(checkIndex)) {
-                    console.log("Matched character is an em-dash.");
+                    // console.log("Matched character is an em-dash.");
                     newInnards += HTML_EM_DASH;
                     workingText = workingText.slice(3);
                 } else if (enDashes.contains(checkIndex)) {
-                    console.log("Matched character is an en-dash.");
+                    // console.log("Matched character is an en-dash.");
                     newInnards += HTML_EN_DASH;
                     workingText = workingText.slice(2);
                 } else if (enDashesNum.contains(checkIndex)) {
-                    console.log("Matched an en-dash between numbers.");
+                    // console.log("Matched an en-dash between numbers.");
                     newInnards += HTML_HAIRSPACE + HTML_EN_DASH + HTML_HAIRSPACE;
                     workingText = workingText.slice(2);
                 } else {
-                    console.log("False positive, passing to next character.");
+                    // console.log("False positive, passing to next character.");
                     newInnards += workingText[0];
                     workingText = workingText.slice(1);
                 }
             } else {
-                console.log("No matches on line. Adding text and clearing workingText.");
+                // console.log("No matches on line. Adding text and clearing workingText.");
                 newInnards += workingText;
                 originalCursor = textEnd;
                 workingText = "";
             }
-            console.log("Adjusting textOffset(%d) += %d - %d = %d", textOffset, textLen, workingText.length, textLen - workingText.length);
+            // console.log("Adjusting textOffset(%d) += %d - %d = %d", textOffset, textLen, workingText.length, textLen - workingText.length);
             textOffset += textLen - workingText.length;
         }
-        console.log("Adjusting offset (%d) += %d - %d = %d", offset, textEnd, textStart, offset + (textEnd - textStart));
+        // console.log("Adjusting offset (%d) += %d - %d = %d", offset, textEnd, textStart, offset + (textEnd - textStart));
         offset += textEnd - textStart;
         if (isAtTextEnd) {
             if (openDouble && settings.colorMismatchedDoubleQuotes) {
-                console.log("Double quotes are open. Closing text span and adding remainder of original innards.");
+                // console.log("Double quotes are open. Closing text span and adding remainder of original innards.");
                 newInnards += CLOSE_SPAN;
             }
             if (openSingle && settings.colorMismatchedSingleQuotes) {
-                console.log("Single quotes are open. Closing text span and adding remainder of original innards.");
+                // console.log("Single quotes are open. Closing text span and adding remainder of original innards.");
                 newInnards += CLOSE_SPAN;
             }
-            console.log("Spanning to end, adjusting cursor.");
+            // console.log("Spanning to end, adjusting cursor.");
             newInnards += innards.slice(textEnd);
             originalCursor = fullLength;
         } else {
-            console.log("Adjusting original cursor from %d to %d.", originalCursor, textEnd);
+            // console.log("Adjusting original cursor from %d to %d.", originalCursor, textEnd);
             originalCursor = textEnd;
         }
     }
