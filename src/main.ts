@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS: TypographySettings = {
     colorDoubleQuotes: true,
     colorMismatchedDoubleQuotes: true,
     colorSingleQuotes: true,
-    colorMismatchedSingleQuotes: true
+    // colorMismatchedSingleQuotes: true
 };
 
 export default class TypographyPlugin extends Plugin {

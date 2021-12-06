@@ -1,63 +1,255 @@
+/* @settings
 
-:root {
-    --typography-color-single-hue: 20;
-    --typography-color-double-hue: 120;
-    --typography-color-saturation: 90%;
-    --typography-color-single-error-hue: 0;
-    --typography-color-double-error-hue: 0;
-    --typography-border-opacity: 25%;
-    --typography-bgcolor-opacity: 12.5%;
+name: Obsidian Typography Plugin
+id: obsidian-typography-plugin
+settings:
+    - 
+        id: typography-border-style
+        title: Border Styles
+        type: heading
+        level: 1
+    -
+        id: typography-border-radius
+        title: Border Radius (for round borders)
+        description:  Border radius in pixels.
+        type: variable-number
+        default: 5
+        format: px
+    -
+        id: typography-border-style1
+        title: Outer Border Style
+        description: Border style for single and double quotes when standing alone.
+        type: variable-select
+        default: dashed
+        options:
+            - dotted
+            - dashed
+            - solid
+            - double
+            - groove
+            - ridge
+            - inset
+            - outset
+            - none
+    -
+        id: typography-border-style2
+        title: Inner Border Style
+        description: Border style for single and double quotes falling within the other (e.g., single quotes surrounding something in a quotation).
+        type: variable-select
+        default: dotted
+        options:
+            - dotted
+            - dashed
+            - solid
+            - double
+            - groove
+            - ridge
+            - inset
+            - outset
+            - none
+    -
+        id: typography-border-width1
+        title: Outer Border Width
+        description: Outer Border Width (in pixels)
+        type: variable-number
+        default: 1
+        format: px
+    -
+        id: typography-border-width2
+        title: Inner Border Width
+        description: Inner Border Width (in pixels)
+        type: variable-number
+        default: 1
+        format: px
+    - 
+        id: typography-colors
+        title: Colors
+        type: heading
+        level: 1
+    -
+        id: typography-sq-color
+        title: Single Quote Color
+        description: Color for text found in (and including) single quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: false
+        default-dark: '#b8dae0'
+        default-light: '#043d49'
+    -
+        id: typography-sq-bdcolor
+        title: Single Quote Border Color
+        description: Border color for text found in (and including) single quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#4da1b326'
+        default-light: '#043d4980'
+    -
+        id: typography-sq-bgcolor
+        title: Single Quote Background Color
+        description: Background color for text found in (and including) single quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#4da1b30d'
+        default-light: '#e7fafe80'
+    -
+        id: typography-dq-color
+        title: Double Quote Color
+        description: Color for text found in (and including) double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: false
+        default-dark: '#b8e0b8'
+        default-light: '#044904'
+    -
+        id: typography-dq-bdcolor
+        title: Double Quote Border Color
+        description: Border color for text found in (and including) double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#4db34d26'
+        default-light: '#04490480'
+    -
+        id: typography-dq-bgcolor
+        title: Double Quote Background Color
+        description: Background color for text found in (and including) double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#4db34d0d'
+        default-light: '#e7fee780'
+    -
+        id: typography-error-color
+        title: Unclosed Double Quote Color
+        description: Color for text found in (and including) unclosed double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: false
+        default-dark: '#e6b3b3'
+        default-light: '#661919'
+    -
+        id: typography-error-bdcolor
+        title: Unclosed Double Quote Border Color
+        description: Border color for text found in (and including) unclosed double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#bf404026'
+        default-light: '#79060680'
+    -
+        id: typography-error-bgcolor
+        title: Unclosed Double Quote Background Color
+        description: Background color for text found in (and including) unclosed double quotes.
+        type: variable-themed-color
+        format: hsl
+        opacity: true
+        default-dark: '#bf40400d'
+        default-light: '#faebeb80'
+
+*/
+/*
+.theme-dark {
+    --typography-sq-color: #b8dae0;
+    --typography-sq-bdcolor: #4da1b326;
+    --typography-sq-bgcolor: #4da1b30d;
+    --typography-dq-color: #b8e0b8;
+    --typography-dq-bdcolor: #4db34d26;
+    --typography-dq-bgcolor: #4db34d0d;
+    --typography-error-color: #e6b3b3;
+    --typography-error-bdcolor: #bf404026;
+    --typography-error-bgcolor: #bf40400d;
 }
 
+.theme-light {
+    --typography-sq-color: #043d49;
+    --typography-sq-bdcolor: #043d4980;
+    --typography-sq-bgcolor: #e7fafe80;
+    --typography-dq-color: #044904;
+    --typography-dq-bdcolor: #04490480;
+    --typography-dq-bgcolor: #e7fee780;
+    --typography-error-color: #661919;
+    --typography-error-bdcolor: #79060680;
+    --typography-error-bgcolor: #faebeb80;
+}
+
+*/
+
+:root {
+    --typography-border-radius: 5px;
+    --typography-border-style1: dashed;
+    --typography-border-style2: dotted;
+    --typography-border-width1: 1px;
+    --typography-border-width2: 1px;
+}
 
 .theme-light {
-    --typography-color-single-quote-lightness: 25%;
-    --typography-color-double-quote-lightness: 25%;
-    --typography-bgcolor-single-quote-lightness: 90%;
-    --typography-bgcolor-double-quote-lightness: 90%;
-    --typography-error-lightness: 35%;
+    --typography-sq-color: hsl(190, 90%, 15%);
+    --typography-sq-bdcolor: hsl(190, 90%, 15%, 50%);
+    --typography-sq-bgcolor: hsl(190, 90%, 95%, 50%);
+
+    --typography-dq-color: hsl(120, 90%, 15%);
+    --typography-dq-bdcolor: hsl(120, 90%, 15%, 50%);
+    --typography-dq-bgcolor: hsl(120, 90%, 95%, 50%);
+
+    --typography-error-color: hsl(0, 60%, 25%);
+    --typography-error-bdcolor: hsl(0, 90%, 25%, 50%);
+    --typography-error-bgcolor: hsl(0, 60%, 95%, 50%);
 }
 
 .theme-dark {
-    --typography-color-single-quote-lightness: 85%;
-    --typography-color-double-quote-lightness: 85%;
-    --typography-bgcolor-single-quote-lightness: 10%;
-    --typography-bgcolor-double-quote-lightness: 10%;
-    --typography-error-lightness: 70%;
+    --typography-sq-color: hsl(190, 40%, 80%);
+    --typography-sq-bdcolor: hsl(190, 40%, 50%, 15%);
+    --typography-sq-bgcolor: hsl(190, 40%, 50%, 5%);
+
+    --typography-dq-color: hsl(120, 40%, 80%);
+    --typography-dq-bdcolor: hsl(120, 40%, 50%, 15%);
+    --typography-dq-bgcolor: hsl(120, 40%, 50%, 5%);
+
+    --typography-error-color: hsl(0, 50%, 80%);
+    --typography-error-bdcolor: hsl(0, 50%, 50%, 15%);
+    --typography-error-bgcolor: hsl(0, 50%, 50%, 5%);
 }
 
-.singleQuote, .doubleQuote, .singleQuoteRunon, .doubleQuoteRunon {
-    border-radius: 0.3em;
-    border: 1px dashed;
+.singleQuote, .doubleQuote, .doubleQuoteRunon {
+    border-radius: var(--typography-border-radius);
+    border-style: var(--typography-border-style1);
+    border-width: var(--typography-border-width1) ;
+    background-clip: padding-box;
 }
 
-.singleQuote .doubleQuote {
-    border: 1px dotted;
+.singleQuote.doubleQuote {
+    border-style: var(--typography-border-style2);
+    border-width: var(--typography-border-width2) ;
+    border-color: var(--typography-sq-bdcolor);
 }
 
 .doubleQuote .singleQuote {
-    border: 1px dotted;
+    border-style: var(--typography-border-style2);
+    border-width: var(--typography-border-width2) ;
+    border-color: var(--typography-dq-bdcolor);
 }
 
 .singleQuote {
-    color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness));
-    border-color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-color-single-quote-lightness), var(--typography-border-opacity));
-    background-color: hsl(var(--typography-color-single-hue), var(--typography-color-saturation), var(--typography-bgcolor-single-quote-lightness), var(--typography-bgcolor-opacity));
+    color: var(--typography-sq-color);
+    border-color: var(--typography-sq-bdcolor);
+    background-color: var(--typography-sq-bgcolor);
 }
 .doubleQuote {
-    color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness));
-    border-color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-color-double-quote-lightness), var(--typography-border-opacity));
-    background-color: hsl(var(--typography-color-double-hue), var(--typography-color-saturation), var(--typography-bgcolor-double-quote-lightness), var(--typography-bgcolor-opacity));
+    color: var(--typography-dq-color);
+    border-color: var(--typography-dq-bdcolor);
+    background-color: var(--typography-dq-bgcolor);
 }
-
+/*
 .singleQuoteRunon {
     color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-error-lightness));
     border-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-error-lightness), var(--typography-border-opacity));
     background-color: hsl(var(--typography-color-single-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-single-quote-lightness), var(--typography-bgcolor-opacity));
-}
+}*/
 
 .doubleQuoteRunon {
-    color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-error-lightness));
-    border-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-error-lightness), var(--typography-border-opacity));
-    background-color: hsl(var(--typography-color-double-error-hue), var(--typography-color-saturation), var(--typography-bgcolor-double-quote-lightness), var(--typography-bgcolor-opacity));
+    color: var(--typography-error-color);
+    border-color: var(--typography-error-bdcolor);
+    background-color: var(--typography-error-bgcolor);
 }

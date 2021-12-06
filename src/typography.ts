@@ -46,7 +46,7 @@ const CLOSE_SPAN = "</span>";
 
 const FindSimpleApostrophes = (text: string): number[] => {
     let locations: number[] = [];
-    let finder = /((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu;
+    let finder = /((?<!\p{L}|\p{P})'(?=\d0s)(?!\d0s')|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu;
     let match;
     while ((match = finder.exec(text)) !== null) {
         locations.push(match.index);
@@ -56,7 +56,7 @@ const FindSimpleApostrophes = (text: string): number[] => {
 
 const TransformSimpleApostrophes = (text: string): string => {
     // console.log ("Transforming simple apostrophes...");
-    return text.replace(/((?<!\p{L}|\p{P})'(?=\d0s)|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu, UNI_SINGLE_CLOSE);
+    return text.replace(/((?<!\p{L}|\p{P})'(?=\d0s)(?!\d0s')|(?<=\p{L}|\d)'(?=\p{L}|\d)|(?<=\s)'(?=\s))/gmu, UNI_SINGLE_CLOSE);
 };
 
 const FindDoubleQuotes = (text: string): number[] => {
@@ -80,62 +80,8 @@ const FindSingleQuotes = (text: string): number[] => {
     // console.log(">[%s]",text);
     let locations: number[] = [];
 
-/*
-
-Working on a new algorithm. The following will match only closing single quotes. Not all of them, but most:
-
-/('(?= )|'$|(?<=\p{P})'(?=\p{P}))/gmu
-
-And this does open quotes:
-/('(?=(?:\p{L}|\u2019| )*?')|'(?=.*?\p{P}'))/gmu
-
-Again, not all of them, but most. It does fall for 'twas if it is inside quotation marks.
-Probably an idea to parse things in quotation marks individually.
-
-    let closeFinder = /('(?= )|'$|(?<=\p{P})'(?=\p{P}))/gmu;
-    let openFinder = /(?:^|(?<=\s))'(?=(?:\p{L}|\u2019)*?')|(?:^|(?<=\s))'(?=.*?\p{P}')/gmu;
-    let blockFinder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
-
-
-The new algorithm has no way of termining if something is an opening quote without something that follows giving it a clue.
-
-As such, combining the results of the two algorithms may allow us to make the determination. We will need to walk through
-the original results, basically filtering out closing/opening based on the two separate lists from the above regexes.
-That will probably yield the best result.
-
-Still need to find an adequate way to match opening single quotes. If I can find a way that catches all legitimate
-open quotes, then the remainders can be caught by the Final Apostrophes.
-
---------------
-
-So our biggest issue is nesting of quotation marks, parentheses, backets, and braces. That is our biggest issue with parsing
-this text. We are going to have to iterate over the entire string recursively processing based on where we find what.
-
-The simple rules:
-
-An opening single quote may:
-* Be at the start of the line
-* Follow whitespace
-* Follow opening nesting characters (e.g., parentheses, brackets, braces, chevrons, double quotes)
-
-An opening single quote may NOT:
-* Follow a letter
-* Follow a sentence separator
-* Be at the end of a line
-
-A closing single quote may:
-* Be found at the start of a line
-* Be found after a sentence separator (at the end of a line or followed by a space)
-* Be found at the end of a line
-* Be found preceding a letter or other word character (including digits)
-
-A closing single quote may NOT:
-* ?
-
-*/
-
-    // this will match most single quote blocks and run-ons
-    let finder = /(('\w+')|(^|(?<=\p{P}\s))('.*?\p{P}')($|(?=\s))|((?<=\s)'[^\.\n]*')|(^|(?<=\p{P}\s))('.*?\p{P})$)/ug;
+    // this will match most single quote blocks accurately
+    let finder = /('[^\n\r"]*?\p{P}(?<!")')|('[\p{L}\p{N} ]*?')|('[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!")')/mug;
 
     // console.log("Matching...")
     let match;
@@ -143,9 +89,10 @@ A closing single quote may NOT:
         let matchText = text.slice(match.index, finder.lastIndex);
         //console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
         locations.push(match.index);
-        if (matchText[matchText.length - 1] == "'") {locations.push(finder.lastIndex-1)};
+        if (matchText[matchText.length - 1] == "'") { locations.push(finder.lastIndex - 1); };
     }
     return locations;
+
 };
 
 const FindRemainingApostrophes = (text: string, ignore: number[]): number[] => {
@@ -344,11 +291,11 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 let context = workingText.slice(0, firstIndex);;
                 newInnards += context;
                 workingText = workingText.slice(firstIndex);
-                if (simpleApostrophes.contains(checkIndex) || finalApostrophes.contains(checkIndex)) {
+                if (settings.apostrophes && (simpleApostrophes.contains(checkIndex) || finalApostrophes.contains(checkIndex))) {
                     // console.log("Matched character is an apostrophe.");
                     newInnards += HTML_SINGLE_CLOSE;
                     workingText = workingText.slice(1);
-                } else if (doubleQuotes.contains(checkIndex)) {
+                } else if (settings.doubleQuotes && doubleQuotes.contains(checkIndex)) {
                     // console.log("Matched character is a double quote (open? %s).", openDouble);
                     let style = "";
                     if (settings.colorDoubleQuotes && openDouble) {
@@ -363,34 +310,34 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     newInnards += openDouble ? HTML_DOUBLE_CLOSE + style : style + HTML_DOUBLE_OPEN;
                     openDouble = !openDouble;
                     workingText = workingText.slice(1);
-                } else if (singleQuotes.contains(checkIndex)) {
+                } else if (settings.singleQuotes && singleQuotes.contains(checkIndex)) {
                     // console.log("Matched character is a single quote (open? %s; %d/%d).", openSingle, singleQuotes.indexOf(checkIndex), singleQuotes.length);
                     let style = "";
                     if (settings.colorSingleQuotes && openSingle) {
                         style = CLOSE_SPAN;
-                    } else if (settings.colorSingleQuotes && singleQuotes[singleQuotes.length - 1] == checkIndex && singleQuotes.length % 2 != 0) {
-                        // if we are the last double quote and there are an uneven number, we are a runon
-                        // we color as normal unless we don't color the mismatches differently.
-                        style = settings.colorMismatchedSingleQuotes ? OPEN_SINGLE_SPAN_RUNON : OPEN_SINGLE_SPAN;
+                    // } else if (settings.colorSingleQuotes && singleQuotes[singleQuotes.length - 1] == checkIndex && singleQuotes.length % 2 != 0) {
+                    //     // if we are the last double quote and there are an uneven number, we are a runon
+                    //     // we color as normal unless we don't color the mismatches differently.
+                    //     style = settings.colorMismatchedSingleQuotes ? OPEN_SINGLE_SPAN_RUNON : OPEN_SINGLE_SPAN;
                     } else if (settings.colorSingleQuotes) {
                         style = OPEN_SINGLE_SPAN;
                     }
                     newInnards += openSingle ? HTML_SINGLE_CLOSE + style : style + HTML_SINGLE_OPEN;
                     openSingle = !openSingle;
                     workingText = workingText.slice(1);
-                } else if (ellipses.contains(checkIndex)) {
+                } else if (settings.ellipses && ellipses.contains(checkIndex)) {
                     // console.log("Matched character is a horizontal ellipsis.");
                     newInnards += HTML_HORIZ_ELLIPSIS;
                     workingText = workingText.slice(3);
-                } else if (emDashes.contains(checkIndex)) {
+                } else if (settings.dashes && emDashes.contains(checkIndex)) {
                     // console.log("Matched character is an em-dash.");
                     newInnards += HTML_EM_DASH;
                     workingText = workingText.slice(3);
-                } else if (enDashes.contains(checkIndex)) {
+                } else if (settings.dashes && enDashes.contains(checkIndex)) {
                     // console.log("Matched character is an en-dash.");
                     newInnards += HTML_EN_DASH;
                     workingText = workingText.slice(2);
-                } else if (enDashesNum.contains(checkIndex)) {
+                } else if (settings.dashes && enDashesNum.contains(checkIndex)) {
                     // console.log("Matched an en-dash between numbers.");
                     newInnards += HTML_HAIRSPACE + HTML_EN_DASH + HTML_HAIRSPACE;
                     workingText = workingText.slice(2);
@@ -415,10 +362,10 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 // console.log("Double quotes are open. Closing text span and adding remainder of original innards.");
                 newInnards += CLOSE_SPAN;
             }
-            if (openSingle && settings.colorMismatchedSingleQuotes) {
-                // console.log("Single quotes are open. Closing text span and adding remainder of original innards.");
-                newInnards += CLOSE_SPAN;
-            }
+            // if (openSingle && settings.colorMismatchedSingleQuotes) {
+            //     // console.log("Single quotes are open. Closing text span and adding remainder of original innards.");
+            //     newInnards += CLOSE_SPAN;
+            // }
             // console.log("Spanning to end, adjusting cursor.");
             newInnards += innards.slice(textEnd);
             originalCursor = fullLength;

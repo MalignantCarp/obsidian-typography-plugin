@@ -99,7 +99,7 @@ export default class TypographySettingsTab extends PluginSettingTab {
                     this.plugin.settings.colorMismatchedDoubleQuotes = value
                     await this.plugin.saveSettings()
                 }))                
-
+/*
 		new Setting(containerEl)
 			.setName('Style Single Quote Mismatches')
 			.setDesc('Plugin will apply a separate style class around text where a double quote is started but not finished.')
@@ -109,7 +109,7 @@ export default class TypographySettingsTab extends PluginSettingTab {
 					this.plugin.settings.colorMismatchedSingleQuotes = value
 					await this.plugin.saveSettings()
 				}))                
-	
+*/	
     }
 
 
