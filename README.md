@@ -21,6 +21,9 @@ The plugin also allows for highlighting of double and single quoted blocks, incl
 ## Installation
 Right now, this is not in Community Plugins, so you will want to use Obsidian BRAT to install, or manually download the release and install it in your vault's .obsidian folder in plugins/obsidian-typography-plugin.
 
+## Configuration
+You can select what features you want to enable in settings. If you have the Style Settings plugin, you can configure the CSS as well.
+
 # Screenshot
 
 ![ScreenShot](/res/obsidian-typography.png)
