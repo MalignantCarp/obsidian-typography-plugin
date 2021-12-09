@@ -154,7 +154,7 @@ const FindEmDashes = (text: string): number[] => {
 
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
     // console.log("Parsing typography...");
-    console.log(el.innerHTML);
+    // console.log(el.innerHTML);
     let innards = el.innerHTML;
     let tagFinder = /<!--.*-->|<pre.*?>.*?<\/pre>|<(\w*?)( \p{L}+=(?<!\\)".*(?!\\)")*?>/gums;
     let hasTags = tagFinder.test(innards);
@@ -163,15 +163,15 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     if (hasTags) {
         let cursor = innards.search(tagFinder);
         for (var i = 0; i < tags.length; i++) {
-            console.log(boundaries);
-            console.log("Tag found at index %d", cursor, ":", tags[i]);
-            console.log("Adding cursor bounds %d to %d", cursor, cursor + tags[i].length);
+            // console.log(boundaries);
+            // console.log("Tag found at index %d", cursor, ":", tags[i]);
+            // console.log("Adding cursor bounds %d to %d", cursor, cursor + tags[i].length);
             boundaries.push(cursor, cursor + tags[i].length);
             cursor = cursor + tags[i].length;
             let trail = innards.slice(cursor);
             if (i + 1 < tags.length) {
                 let foundIndex = trail.search(tagFinder);
-                console.log("Next match found. Advancing cursor to %d", cursor + foundIndex);
+                // console.log("Next match found. Advancing cursor to %d", cursor + foundIndex);
                 cursor += foundIndex;
             }
         }
@@ -183,15 +183,15 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     let slices: number[] = [];
     let textStart = 0;
     let textEnd = innards.length;
-    console.log(textStart, textEnd);
-    console.log("Boundaries:", boundaries)
+    // console.log(textStart, textEnd);
+    // console.log("Boundaries:", boundaries)
     if (boundaries.length == 0) {
         slices.push(textStart, textEnd);
     } else {
         for (var i = 0; i < boundaries.length; i += 2) {
             let skipStart = boundaries[i];
             let skipEnd = boundaries[i + 1];
-            console.log("text (%d-%d), skip(%d-%d) [%d/%d]", textStart, textEnd, skipStart, skipEnd, i, boundaries.length);
+            // console.log("text (%d-%d), skip(%d-%d) [%d/%d]", textStart, textEnd, skipStart, skipEnd, i, boundaries.length);
             if (skipStart != skipEnd) { // skipStart == skipEnd == skipping nothing, we can just continue
                 if (textStart != skipStart) {
                     slices.push(textStart, skipStart);
@@ -201,7 +201,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 }
             }
             if (i + 2 >= boundaries.length) {
-                console.log("text (%d-%d), skip(%d-%d) [%d/%d]", textStart, textEnd, skipStart, skipEnd, i+2, boundaries.length);
+                // console.log("text (%d-%d), skip(%d-%d) [%d/%d]", textStart, textEnd, skipStart, skipEnd, i+2, boundaries.length);
                 if (skipEnd != textEnd) {
                     slices.push(skipEnd, textEnd);
                 }
