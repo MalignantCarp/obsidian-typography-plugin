@@ -156,7 +156,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
     // console.log("Parsing typography...");
     // console.log(el.innerHTML);
     let innards = el.innerHTML;
-    let tagFinder = /<!--.*-->|<pre.*?>.*?<\/pre>|<(\w*?)( \p{L}+=(?<!\\)".*(?!\\)")*?>/gums;
+    let tagFinder = /<!--.*-->|<pre.*?>.*?<\/pre>|<(.*?)( \p{L}+=(?<!\\)".*(?!\\)")*?>/gums;
     let hasTags = tagFinder.test(innards);
     let boundaries: number[] = [];
     let tags = innards.match(tagFinder);
