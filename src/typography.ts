@@ -175,7 +175,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                 cursor += foundIndex;
             }
         }
-        console.log(boundaries)
+        // console.log(boundaries)
     }
 
     // from the tag boundaries, we determine the ranges of innerHTML that contain raw text.
