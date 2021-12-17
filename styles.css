@@ -8,6 +8,7 @@ settings:
         title: Border Styles
         type: heading
         level: 1
+        collapsed: true
     -
         id: typography-border-radius
         title: Border Radius (for round borders)
@@ -66,6 +67,7 @@ settings:
         title: Colors
         type: heading
         level: 1
+        collapsed: true
     -
         id: typography-sq-color
         title: Single Quote Color
@@ -149,6 +151,15 @@ settings:
         default-light: '#faebeb80'
 
 */
+
+:root {
+    --typography-border-radius: 5px;
+    --typography-border-style1: dashed;
+    --typography-border-style2: dotted;
+    --typography-border-width1: 1px;
+    --typography-border-width2: 1px;
+}
+
 /*
 .theme-dark {
     --typography-sq-color: #b8dae0;
@@ -175,14 +186,6 @@ settings:
 }
 
 */
-
-:root {
-    --typography-border-radius: 5px;
-    --typography-border-style1: dashed;
-    --typography-border-style2: dotted;
-    --typography-border-width1: 1px;
-    --typography-border-width2: 1px;
-}
 
 .theme-light {
     --typography-sq-color: hsl(190, 90%, 15%);
