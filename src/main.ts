@@ -23,7 +23,7 @@ export default class TypographyPlugin extends Plugin {
         //const source = el.innerHTML
         //console.log ("Element is ", el.tagName)
         let typograph = typography(el, this.settings);
-        el.innerHTML = typograph;
+        //el.innerHTML = typograph;
     };
 
     async onload() {
@@ -31,24 +31,24 @@ export default class TypographyPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new TypographySettingsTab(this.app, this));
         MarkdownPreviewRenderer.registerPostProcessor(this.postprocessor, 0)
-        console.log("Loaded.");
+        // console.log("Loaded.");
     }
 
     async onunload() {
         console.log('Unloading typography plugin');
         MarkdownPreviewRenderer.unregisterPostProcessor(this.postprocessor)
-        console.log('Unloaded.');
+        // console.log('Unloaded.');
     }
 
     async loadSettings() {
         console.log('Loading typography settings.');
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-        console.log('Done.')
+        // console.log('Done.')
     }
 
     async saveSettings() {
         console.log('Saving typography settings.');
         await this.saveData(this.settings);
-        console.log('Done.')
+        // console.log('Done.')
     }
 }
