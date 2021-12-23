@@ -29,11 +29,10 @@ const UNI_EM_DASH = "\u2014";
 
 const UNI_HAIRSPACE = "\u200A";
 
-const OPEN_DOUBLE_SPAN = '<span class="doubleQuote">';
-const OPEN_SINGLE_SPAN = '<span class="singleQuote">';
-const OPEN_DOUBLE_SPAN_RUNON = '<span class="doubleQuoteRunon">';
-const OPEN_SINGLE_SPAN_RUNON = '<span class="singleQuoteRunon">';
-const CLOSE_SPAN = "</span>";
+const SPAN_DOUBLE = '<span class="doubleQuote">';
+const SPAN_SINGLE = '<span class="singleQuote">';
+const SPAN_DOUBLE_RUNON = '<span class="doubleQuoteRunon">';
+const SPAN_CLOSE = "</span>";
 
 const FindSimpleApostrophes = (text: string): number[] => {
     let locations: number[] = [];
@@ -248,7 +247,7 @@ const LocateTokens = (textContent: string): Map<number, [string, number, number,
     return replaceIt;
 };
 
-const Typography = (el: HTMLElement, settings: TypographySettings) => {
+const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
     // console.log("Parsing typography...");
     // console.log(el.innerHTML);
     let tup = FindStyleableText(el, 0);
@@ -267,6 +266,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
 
     let replacementMap = LocateTokens(textContent);
     let styleMap: Map<number, [string, number, boolean]> = new Map();
+    let newNodes: Map<[number, number], Node> = new Map<[number, number], Node>();
     /*
 
     We now know where everything is. We will now step through each entry in the replacement map
@@ -291,6 +291,8 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
         let offset = 0;
         totalLength = textNode.textContent.length;
         console.log(replacementMap);
+        let startOffset = 0;
+        let endOffset = 0;
         for (const [index, replacementTuple] of replacementMap) {
             let token = replacementTuple[0];
             let tokenLength = replacementTuple[1];
@@ -298,10 +300,13 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
             let opening = replacementTuple[3];
             let complete = replacementTuple[4];
             let originalContent = textNode.textContent;
-            styleMap.set(index + lengthChange, [token, opening, complete]);
+            styleMap.set(index /*+ lengthChange*/, [token, opening, complete]);
             // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
             while (index >= end) {
-                // console.log("Moving to next node...");
+                endOffset += offset;
+                // console.log("Moving to next node. %d + %d = %d to %d + %d = %d", start, startOffset, start+startOffset, end, endOffset, end+endOffset)
+                newNodes.set([start + startOffset, end + endOffset], textNode);
+                startOffset += offset;
                 textRange = mapIter.next().value;
                 start = textRange[0];
                 end = textRange[1];
@@ -321,8 +326,8 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
         }
     }
     if (styleMap.size > 0) { // if we have any style information
+        // we won't bother doing any of this stuff if we don't have to
         if (settings.colorDoubleQuotes || settings.colorMismatchedDoubleQuotes || settings.colorSingleQuotes) {
-            // we won't bother doing any of this stuff if we don't have to
             let mapIter = nodeMap.keys();
             let textRange = mapIter.next().value;
             let start = textRange[0];
@@ -349,7 +354,6 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     textNode = nodeMap.get(textRange);
                     // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
                     // reset offset
-                    offset = 0;
                 }
                 let doubles = [UNI_DOUBLE_OPEN, UNI_DOUBLE_CLOSE];
                 let singles = [UNI_SINGLE_OPEN, UNI_SINGLE_CLOSE];
@@ -361,7 +365,7 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
                     // console.log("Double=", doubleLoc);
                 } else if (settings.colorMismatchedDoubleQuotes && doubles.contains(token) && puncType == PUNC_OPENING && !complete) {
                     // we need to create a span around the start of the block with the opening double quote that doesn't terminate
-                    runOn = [index, totalLength] // there should technically be only one of these
+                    runOn = [index, totalLength]; // there should technically be only one of these
                     // console.log("Runon=", runOn);
                     runOnLocations.push(runOn);
                 } else if ((settings.colorDoubleQuotes) && doubles.contains(token) && puncType == PUNC_CLOSING) {
@@ -389,17 +393,115 @@ const Typography = (el: HTMLElement, settings: TypographySettings) => {
             // console.log("RO", runOnLocations);
 
             /*
-                All that remains now is running through the entire node tree and replacing the text locations that
-                contain the single and double quote and runon blocks with spans surrounding them. Probably easiest
-                to first determine if all of the text blocks are under the same parent. If that is the case,
-                the job is easier, especially if there are no non-text blocks in between. This really only gets
-                complicated when there are tags of any kind other than <em> <bold> <strong> <i> etc. that cross
-                over, so we will want to generate some test modeling with things like [**"This is a** test."] to
-                ensure that we are properly handling that.
+                Our next step is taking the original element and determining the parent object of each relevant
+                text node while joining all of these together and inserting the name of the style to go with
+                the surrounding SPAN tag.
+            */
+            let styles: [[number, number], string, [Node, Node][]][] = [];
+            console.log(styles);
+            CollectStyles(SPAN_DOUBLE, doubleQuoteLocations, newNodes, styles);
+            CollectStyles(SPAN_SINGLE, singleQuoteLocations, newNodes, styles);
+            CollectStyles(SPAN_DOUBLE_RUNON, runOnLocations, newNodes, styles);
+            console.log(styles);
+            /*
+                Now that we have an array of the text nodes and their parents, we check to see if they all have
+                the same parent, as that simplifies things
+            */
+            let parent = null;
+            for (var i = 0; i < styles.length; i++) {
+                if (parent != null) {
+                    if (styles[i][2][2] != parent) {
+                        console.log("Parental mismatch!");
+                        console.log(styles);
+                        parent = null;
+                    }
+                }
+                parent = styles[i][2][2];
+            }
+            for (var i = 0; i < styles.length; i++) {
+                let range = styles[i][0];
+                let start = range[0];
+                let end = range[0];
+                
+            }
+            /*
+                Next we split the starting text node just before the opening quote. We mark the new text node as
+                the start. We split the ending text node just after the closing quote (or the end of the paragraph)
+                and mark that as the remainder.
+
+                We then insert all of the text nodes and parent elements (underneath the <p> or <h*> tag) into a
+                new span with the respective class.
+
+                We can then repeat this all for the next batch of quotes and then runons.
             */
         }
-        
+
     }
 };
 
+const CollectStyles = (style: string, locations: [number, number][], nodeMap: Map<[number, number], Node>, styles: [[number, number], string, [Node, Node][]][]) => {
+    if (nodeMap.size > 0) {
+        for (var i = 0; i < locations.length; i++) {
+            let range: [number, number] = locations[i];
+            let affectedNodes: Node[] = [];
+            var textNodes: [Node, Node][] = [];
+            let startLoc = range[0];
+            let endLoc = range[1];
+            let mapIter = nodeMap.keys();
+            let iterObj = mapIter.next();
+            let textRange = iterObj.value;
+            let start = textRange[0];
+            let end = textRange[1];
+            let textNode = nodeMap.get(textRange);
+            let offset = 0;
+            while (startLoc < start && startLoc >= end) {
+                // advance to the first node containing our text
+                iterObj = mapIter.next();
+                textRange = iterObj.value;
+                start = textRange[0];
+                end = textRange[1];
+                textNode = nodeMap.get(textRange);
+            }
+            affectedNodes.push(textNode);
+            while (endLoc > end) {
+                // if the ending location of our style exceeds the end spot for this text node, we advance to the next and add it
+                iterObj = mapIter.next();
+                if (iterObj.done) {
+                    break;
+                }
+                textRange = iterObj.value;
+                start = textRange[0];
+                end = textRange[1];
+                textNode = nodeMap.get(textRange);
+                affectedNodes.push(textNode);
+            }
+            // if endLoc is now <= end, then our textNode has the end point we need
+            for (var j = 0; j < affectedNodes.length; j++) {
+                textNodes.push([affectedNodes[j], affectedNodes[j].parentNode]);
+            }
+            styles.push([range, style, textNodes]);
+        }
+    }
+
+};
+
+const Typography = (el: HTMLElement, settings: TypographySettings) => {
+    // We need to run this on certain tags: h*, p, etc.
+    for (var i = 1; i <= 6; i++) {
+        var levelHeaders = Array.from(el.getElementsByTagName('h' + i));
+        for (var j = 0; j < levelHeaders.length; j++) {
+            ProcessElement(<HTMLElement>levelHeaders[j], settings);
+        }
+    }
+    let elements: HTMLElement[] = [];
+    elements = Array.from(el.getElementsByTagName('p'));
+    for (var i = 0; i < elements.length; i++) {
+        ProcessElement(<HTMLElement>elements[i], settings);
+    }
+    elements = Array.from(el.getElementsByTagName('li'));
+    for (var i = 0; i < elements.length; i++) {
+        ProcessElement(<HTMLElement>elements[i], settings);
+    }
+
+};
 export { Typography as typography };
