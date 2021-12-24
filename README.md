@@ -18,6 +18,13 @@ Once the single quotes are figured out, the remaining straight apostrophes are t
 ## Highlighting
 The plugin also allows for highlighting of double and single quoted blocks, including borders, with alternating borders for when a single quote block is in a double quote block and vice versa. Due to certainly limitations surrounding single quote recognition, it is generally not recommended that single quote blocks be highlighted if they will occur within double quote blocks. It may be desirable to use the same colors for each.
 
+## Known Issues
+ - Certain combinations of tags and links will prevent a line from being styled correctly.
+ - Certain cominations of list items will prevent a line from being styled correctly.
+ - In Obisidian v0.13.14, transclusions/internal embeds are no longer rendered and certain task list items are replicated as regular list items.
+
+The above issues will be solved after a rewrite replacing code that current modifies the HTML of the DOM to actually modifying the DOM itself. Sadly, this upgrade is taking longer than anticipated.
+
 ## Installation
 Right now, this is not in Community Plugins, so you will want to use Obsidian BRAT to install, or manually download the release and install it in your vault's .obsidian folder in plugins/obsidian-typography-plugin.
 
@@ -29,4 +36,4 @@ You can select what features you want to enable in settings. If you have the Sty
 ![ScreenShot](/res/obsidian-typography.png)
 
 # Current Plans
-- [ ] Alternative means for handling single quotes, such as a surrogate character for open single quote (which occurs less frequently than closing single quotes, which are also apostrophes) or an override character (such as using a \ or some other character)
+- [ ] Alternative means for handling single quotes, such as a surrogate character for single quotes (which will allow us to differentiate between single quote blocks and apostrophes).
