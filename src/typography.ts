@@ -210,6 +210,7 @@ const ProcessNode = (node: Node, offset: number, tokens: ReplacementToken[], set
 const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
     let rawText = FindRawText(el);
     let tokens = FindTokens(rawText);
+    console.log("%d token(s)", tokens.length);
     if (tokens.length > 0) {
         console.log(rawText, tokens);
         ResolveTokens(rawText, tokens);
@@ -228,9 +229,9 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
             }
             limit++;
             let currentNode = nodeStack.pop(); // grab the current node
-            console.log("Obtained current node: ", currentNode);
+            console.log("Obtained current node: [%s]", currentNode.textContent);
             if (currentNode.nodeType == currentNode.ELEMENT_NODE) {
-                console.log("It is an element.");
+                console.log("It is an element (<%s>).", currentNode.nodeName);
                 // we can't do anything with an element node, we need to traverse its children until we find text nodes
                 // but we want to ignore any content that might be in <pre> or <code> tags
                 if (!ignoreTags.contains(currentNode.nodeName.toLowerCase())) {
@@ -278,7 +279,18 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                     }
                     // set our replacement text
                     console.log("Replacing [%s] with [%s] content.", replacementNode.textContent, insert);
-                    replacementNode.textContent = insert;
+                    if (token.spanForChar) {
+                        let span = document.createElement("span");
+                        span.className = token.spanClassForChar;
+                        span.appendChild(document.createTextNode(insert));
+                        replacementNode.replaceWith(span);
+                        if (splitLocation == 0) {
+                            // our "current node" is the replacement node
+                            currentNode = span;
+                        }
+                    } else {
+                        replacementNode.textContent = insert;
+                    }
                     console.log("Compensating textOffset(%d)+%d = %d", textOffset, -token.lengthOffset, textOffset - token.lengthOffset);
                     textOffset -= token.lengthOffset;
                     /*

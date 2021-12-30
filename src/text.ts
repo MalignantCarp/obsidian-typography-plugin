@@ -97,10 +97,9 @@ const FindTokens = (text: string): ReplacementToken[] => {
         // if they match and sequence is blank, we add both, else we just append current char
         if (char == lastChar) {
             sequence += sequence == "" ? char + lastChar : char;
-        } else {
-            sequence = "";
         }
         // console.log("Checking char: %s[%s] (sequence: [%s])", lastChar, char, sequence);
+        // console.log("%s && (%s || (%s && %s))", extendedTokens.contains(sequence), char != lastChar, char == lastChar, i + 1 >= text.length);
         if (extendedTokens.contains(sequence) && (char != lastChar || (char == lastChar && i + 1 >= text.length))) {
             // if our current character is not equal to our last character, then we have moved to a different sequence
             // if we are at the end of the text, we have finished our sequence
@@ -207,6 +206,9 @@ const FindTokens = (text: string): ReplacementToken[] => {
                 };
                 tokens.push(token);
             }
+        }
+        if (char != lastChar) {
+            sequence = "";
         }
         lastChar = char;
     }
