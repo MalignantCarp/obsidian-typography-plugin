@@ -1,4 +1,5 @@
-import { TypographySettings } from "./types";
+import { ReplacementToken, TypographySettings } from "./types";
+import { FindRawText, FindTokens, ResolveTokens } from "./text";
 
 /*
 apostrophe = right single quote = &rsquo; = \u2019
@@ -142,347 +143,215 @@ const FindEmDashes = (text: string): number[] => {
 
 };
 
-const FindStyleableText = (el: Node, offset: number): [string, Map<[number, number], Node>] => {
-    let styleableText: Map<[number, number], Node> = new Map<[number, number], Node>();
-    let text = "";
-
-    // console.log ("Node is ", el);
-    for (var i = 0; i < el.childNodes.length; i++) {
-        let child = el.childNodes[i];
+const ProcessNode = (node: Node, offset: number, tokens: ReplacementToken[], settings: TypographySettings): number => {
+    /*
+        We need to have a means of passing the node tree back in case our span begins in the midst of a child element,
+        but ends in a different one. We will need to relocate the subsequent elements into that span.
+    */
+    console.log("ProcessNode(%s, %d, %s)", node, offset, tokens);
+    console.log('---');
+    let tokenOffset = 0;
+    for (var i = 0; i < node.childNodes.length && tokens.length > 0 && tokenOffset < tokens.length; i++) {
+        let child = node.childNodes[i];
         // console.log ("Childnode[%d]: %s", i, child.nodeType);
         // console.log ("Offset is %d", offset);
 
-        let type = "";
-        switch (child.nodeType) {
-            case 1: type = "Element"; break;
-            case 2: type = "Attribute"; break;
-            case 3: type = "Text"; break;
-            case 4: type = "CDATA"; break;
-            case 7: type = "Processing Instruction"; break;
-            case 8: type = "Comment"; break;
-            case 9: type = "Document"; break;
-            case 10: type = "DOCTYPE"; break;
-            case 11: type = "DocumentFragment"; break;
-            default: type = "Unknown"; break;
-        }
-        //console.log("Node is %s(<%s>)", type, child.nodeName);
-        // console.log("Node value: ", child.nodeValue);
-
         let ignore = ["pre", "code"];
 
-        if (type == "Element" && !ignore.contains(child.nodeName.toLowerCase())) {
-            let newMap = FindStyleableText(child, offset);
-            // console.log (newMap);
-            if (newMap[1].size > 0) {
-                let adjustment = newMap[0].length;
-                // console.log("New content found in child(ren), adjusting offset from %d to %d", offset, offset+adjustment)
-                styleableText = new Map([...styleableText, ...newMap[1]]);
-                text += newMap[0];
-                offset += adjustment;
+        if (child.nodeType == child.ELEMENT_NODE && !ignore.contains(child.nodeName.toLowerCase())) {
+            console.log("Processing child element(s)");
+            offset = ProcessNode(child, offset, tokens, settings);
+        } else if (child.nodeType == child.TEXT_NODE) {
+            console.log("Processing text within [%s]", child.textContent);
+            /*
+                Now we actually get to do something.
+                offset is our offset into the main rawText that was retrieved in ProcessElement.
+                We are following that code here ignoring <pre> and <code> tags, so we should be safe to operate here
+                on whatever text we find. The offset is so we know what index within this text we are to operate on.
+                Once we have dealt with a token, we should remove it from the token list.
+            */
+            let token = tokens[tokenOffset];
+            let adjustment = child.textContent.length;
+            let pos = token.location - offset;
+            while (pos <= adjustment && tokenOffset < tokens.length) {
+                console.log("Full text range is %d -> %d", offset, offset + adjustment);
+                console.log("Local text range is %d -> %d", 0, adjustment);
+                console.log("Token location is %d within full text, %d within local text", token.location, pos);
+                // while our position within the text is within this child textNode
+                console.log(token, offset, child.textContent);
+                if (token.resolved) {
+                    // we only want to take action of the token is resolved
+                    if (token.spanStart || token.spanEnd || token.spanForChar) {
+                        // We want to stick to raw replacements for now. Anything requiring DOM manipulation can be bypassed
+                        console.log("Bypassing span token.");
+                        tokenOffset++;
+                    } else {
+                        let originalContent = child.textContent;
+                        child.textContent = originalContent.slice(0, pos) + token.replacement + originalContent.slice(pos + token.length);
+                        tokens.remove(token);
+                    }
+                } else {
+                    console.log("Bypassing unresolved token.");
+                    tokenOffset++;
+                }
+                token = tokens[tokenOffset];
+                pos = token.location - offset;
+                // console.log('---');
             }
-        } else if (type == "Text") {
-            let content = child.nodeValue;
-            let start = offset;
-            let end = content.length + offset;
-            // console.log("New content found, adjusting offset from %d to %d", offset, end);
-            offset = end;
-            styleableText.set([start, end], child);
-            text += content;
+            offset += adjustment;
         } else {
             //console.log ("Skipping node of type '%s': [%s]", type, child);
         }
     }
-    return [text, styleableText];
-};
-
-const LocateTokens = (textContent: string): Map<number, [string, number, number, number, boolean]> => {
-    let simpleApos = FindSimpleApostrophes(textContent);
-    let singleQuotes = FindSingleQuotes(textContent);
-    let doubleQuotes = FindDoubleQuotes(textContent);
-    let remainingApos = FindRemainingApostrophes(textContent, singleQuotes);
-    let ellipses = FindEllipses(textContent);
-    let enDashes = FindEnDashes(textContent);
-    let enDashesNum = FindEnDashesBetweenNumbers(textContent);
-    let emDashes = FindEmDashes(textContent);
-
-    let doubleIsOpen = false;
-    let singleIsOpen = false;
-
-    let replaceIt: Map<number, [string, number, number, number, boolean]> = new Map();
-    // Our map is index, [replacement char(s), length of source, change in length, type, complete?]
-    // type is oen of PUNC_ATOMIC, PUNC_OPENING, PUNC_CLOSING
-
-    for (var i = 0; i < textContent.length; i++) {
-        // Prepare easy mapping table
-        if (simpleApos.contains(i) || remainingApos.contains(i)) {
-            replaceIt.set(i, [UNI_SINGLE_CLOSE, 1, 0, PUNC_ATOMIC, false]); // same number of characters
-        } else if (ellipses.contains(i)) {
-            replaceIt.set(i, [UNI_HORIZ_ELLIPSIS, 3, -2, PUNC_ATOMIC, false]); // we lose 2 characters as we are replacing ... with the unicode equivalent, which is 1 char
-        } else if (enDashes.contains(i)) {
-            replaceIt.set(i, [UNI_EN_DASH, 2, -1, PUNC_ATOMIC, false]); // we are replacing -- with an en-dash, so 2 to 1, losing 1
-        } else if (emDashes.contains(i)) {
-            replaceIt.set(i, [UNI_EM_DASH, 3, -2, PUNC_ATOMIC, false]); // we are replacing --- with an em-dash, so 3 to 1, losing 2
-        } else if (enDashesNum.contains(i)) {
-            // This is a slightly unique situation; we are replacing -- with a hair space on either side of an en-dash, so 2 to 3, gaining 1
-            replaceIt.set(i, [UNI_HAIRSPACE + UNI_EN_DASH + UNI_HAIRSPACE, 2, 1, PUNC_ATOMIC, false]);
-        } else if (doubleQuotes.contains(i)) {
-            // console.log(i, doubleIsOpen, doubleQuotes[doubleQuotes.length - 1]);
-            if (doubleIsOpen) {
-                replaceIt.set(i, [UNI_DOUBLE_CLOSE, 1, 0, PUNC_CLOSING, false]);
-            } else {
-                // if we are opening quotes and we are the last quote, we are not complete
-                replaceIt.set(i, [UNI_DOUBLE_OPEN, 1, 0, PUNC_OPENING, !(i == doubleQuotes[doubleQuotes.length - 1])]);
-            }
-            doubleIsOpen = !doubleIsOpen;
-        } else if (singleQuotes.contains(i)) {
-            if (singleIsOpen) {
-                replaceIt.set(i, [UNI_SINGLE_CLOSE, 1, 0, PUNC_CLOSING, false]);
-            } else {
-                replaceIt.set(i, [UNI_SINGLE_OPEN, 1, 0, PUNC_OPENING, true]);
-            }
-            singleIsOpen = !singleIsOpen;
-        }
-
-    }
-    return replaceIt;
+    // console.log("---");
+    return offset;
 };
 
 const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
-    // console.log("Parsing typography...");
-    // console.log(el.innerHTML);
-    let tup = FindStyleableText(el, 0);
-    let textContent = tup[0];
-    let nodeMap = tup[1];
-    /*     console.log("Validating  text content map...");
-        for (const keyPair of nodeMap.keys()) {
-            let start = keyPair[0];
-            let end = keyPair[1];
-            let textSlice = textContent.slice(start,end);
-            console.log(textSlice);
-            console.log(nodeMap.get(keyPair).textContent);
-            console.log (textSlice == nodeMap.get(keyPair).textContent);
-        }
-     */
-
-    let replacementMap = LocateTokens(textContent);
-    let styleMap: Map<number, [string, number, boolean]> = new Map();
-    let newNodes: Map<[number, number], Node> = new Map<[number, number], Node>();
-    /*
-
-    We now know where everything is. We will now step through each entry in the replacement map
-    and make the required adjustments, then remap that data into the styleMap based on the offset
-    adjustments provided in the token replacement map.
-
-    Because everything is based on the full text content of all of the nodes, the index we retrieve
-    for start and end within the map is for the whole text content. In order to translate to the
-    text node's content, we must subtract the start index from it.
-
-    Further, we must set an offset within the node to account for fluctuation due to changing text content
-    for things like the dashes and ellipses, as these change the length of the string.
-
-    */
-    let totalLength = 0;
-    if (nodeMap.size > 0) { // if there's nothing there, bypass
-        let mapIter = nodeMap.keys();
-        let textRange = mapIter.next().value;
-        let start = textRange[0];
-        let end = textRange[1];
-        let textNode = nodeMap.get(textRange);
-        let offset = 0;
-        totalLength = textNode.textContent.length;
-        console.log(replacementMap);
-        let startOffset = 0;
-        let endOffset = 0;
-        for (const [index, replacementTuple] of replacementMap) {
-            let token = replacementTuple[0];
-            let tokenLength = replacementTuple[1];
-            let lengthChange = replacementTuple[2];
-            let opening = replacementTuple[3];
-            let complete = replacementTuple[4];
-            let originalContent = textNode.textContent;
-            styleMap.set(index /*+ lengthChange*/, [token, opening, complete]);
-            // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
-            while (index >= end) {
-                endOffset += offset;
-                // console.log("Moving to next node. %d + %d = %d to %d + %d = %d", start, startOffset, start+startOffset, end, endOffset, end+endOffset)
-                newNodes.set([start + startOffset, end + endOffset], textNode);
-                startOffset += offset;
-                textRange = mapIter.next().value;
-                start = textRange[0];
-                end = textRange[1];
-                textNode = nodeMap.get(textRange);
-                originalContent = textNode.textContent;
-                totalLength += originalContent.length + offset;
-                // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
-                // reset offset
-                offset = 0;
+    let rawText = FindRawText(el);
+    let tokens = FindTokens(rawText);
+    if (tokens.length > 0) {
+        console.log(rawText, tokens);
+        ResolveTokens(rawText, tokens);
+        //ProcessNode(el, 0, tokens, settings);
+        let nodeStack: Node[] = [el];
+        let spanStack: Node[] = [];
+        let textOffset = 0;
+        let tokenNum = 0;
+        let endPoint = rawText.length;
+        let ignoreTags = ["pre", "code"];
+        let limit = 0;
+        while (nodeStack.length > 0) {
+            if (limit > 255) {
+                console.log("Something went wrong!");
+                break;
             }
-            let modChar = index - start + offset;
-            // console.log("Starting at %s for %s characters, for token [%s]", modChar, tokenLength, token);
-            // console.log("[%s]\n[%s]-->[%s]\n[%s]", originalContent.slice(0, modChar), originalContent.slice(modChar, modChar + tokenLength), token, originalContent.slice(modChar + tokenLength));
-            textNode.textContent = originalContent.slice(0, modChar) + token + originalContent.slice(modChar + tokenLength);
-            // console.log("==>[%s]", textNode.textContent);
-            offset += lengthChange;
-        }
-    }
-    if (styleMap.size > 0) { // if we have any style information
-        // we won't bother doing any of this stuff if we don't have to
-        if (settings.colorDoubleQuotes || settings.colorMismatchedDoubleQuotes || settings.colorSingleQuotes) {
-            let mapIter = nodeMap.keys();
-            let textRange = mapIter.next().value;
-            let start = textRange[0];
-            let end = textRange[1];
-            let textNode = nodeMap.get(textRange);
-            let offset = 0;
-            let singleQuoteLocations: [number, number][] = [];
-            let doubleQuoteLocations: [number, number][] = [];
-            let runOnLocations: [number, number][] = []; // this should run from start of quote to end of block; should only have one runOn
-            var singleLoc: [number, number];
-            var doubleLoc: [number, number];
-            var runOn: [number, number];
-            // console.log(styleMap);
-            for (const [index, styleTuple] of styleMap) {
-                let token = styleTuple[0];
-                let puncType = styleTuple[1];
-                let complete = styleTuple[2];
-                // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
-                while (index >= end) {
-                    // console.log("Moving to next node...");
-                    textRange = mapIter.next().value;
-                    start = textRange[0];
-                    end = textRange[1];
-                    textNode = nodeMap.get(textRange);
-                    // console.log("@Index(%d), Range(%d-%d), Text = [%s]", index, start, end, originalContent);
-                    // reset offset
-                }
-                let doubles = [UNI_DOUBLE_OPEN, UNI_DOUBLE_CLOSE];
-                let singles = [UNI_SINGLE_OPEN, UNI_SINGLE_CLOSE];
-                // console.log(token, puncType, complete, doubleLoc, singleLoc, runOn);
-                if (settings.colorDoubleQuotes && doubles.contains(token) && puncType == PUNC_OPENING && (complete || !settings.colorMismatchedDoubleQuotes)) {
-                    // we need to create a span around the start of the block with the opening double quote if it is complete or if we are not
-                    // styling mismatched double quotes differently
-                    doubleLoc = [index, -1];
-                    // console.log("Double=", doubleLoc);
-                } else if (settings.colorMismatchedDoubleQuotes && doubles.contains(token) && puncType == PUNC_OPENING && !complete) {
-                    // we need to create a span around the start of the block with the opening double quote that doesn't terminate
-                    runOn = [index, totalLength]; // there should technically be only one of these
-                    // console.log("Runon=", runOn);
-                    runOnLocations.push(runOn);
-                } else if ((settings.colorDoubleQuotes) && doubles.contains(token) && puncType == PUNC_CLOSING) {
-                    // close the span
-                    doubleLoc[1] = index;
-                    // console.log("Double=>", doubleLoc);
-                    doubleQuoteLocations.push(doubleLoc);
-                    doubleLoc = [null, null];
-                } else if (settings.colorSingleQuotes && singles.contains(token) && puncType == PUNC_OPENING) {
-                    // open the span
-                    singleLoc = [index, -1];
-                    // console.log("Single=", singleLoc);
-                } else if (settings.colorSingleQuotes && singles.contains(token) && puncType == PUNC_CLOSING) {
-                    // close the span
-                    if (singleLoc) {
-                        singleLoc[1] = index;
-                        singleQuoteLocations.push(singleLoc);
-                        // console.log ("Single=>", singleLoc)
+            limit++;
+            let currentNode = nodeStack.pop(); // grab the current node
+            console.log("Obtained current node: ", currentNode);
+            if (currentNode.nodeType == currentNode.ELEMENT_NODE) {
+                console.log("It is an element.");
+                // we can't do anything with an element node, we need to traverse its children until we find text nodes
+                // but we want to ignore any content that might be in <pre> or <code> tags
+                if (!ignoreTags.contains(currentNode.nodeName.toLowerCase())) {
+                    if (currentNode.hasChildNodes()) {
+                        console.log("It has children.");
+                        nodeStack.push(currentNode); // put this element back onto the stack
+                        nodeStack.push(currentNode.firstChild);
+                        continue;
                     }
-                    singleLoc = [null, null];
+                    // if there are no child nodes, we do nothing and move on
                 }
-            }
-            // console.log("DQ", doubleQuoteLocations);
-            // console.log("SQ", singleQuoteLocations);
-            // console.log("RO", runOnLocations);
+            } else if (currentNode.nodeType == currentNode.TEXT_NODE) {
+                console.log("It is a text node.");
+                let token = tokens[tokenNum];
+                while (tokenNum < tokens.length && !token.resolved) {
+                    console.log("Skipping token [%s]->[%s]@%d", token.original, token.replacement, token.location);
+                    tokenNum++;
+                    token = tokens[tokenNum];
+                }
+                let textLength = currentNode.textContent.length;
+                console.log("Token %d/%d", tokenNum + 1, tokens.length);
+                if (tokenNum < tokens.length) { console.log(token, token.location, textOffset, textLength, token.location - textOffset); }
+                if (tokenNum < tokens.length && token.location >= textOffset && token.location - textOffset < textLength) {
+                    // If token.location is > or equal to textOffset - textLength, then the token belongs in another text node
+                    console.log("Token is in this node.");
+                    console.log("Replacing [%s] in [%s] from %d to %d.", token.original, currentNode.textContent, token.location - textOffset, token.location - textOffset + token.length);
+                    let splitLocation = token.location - textOffset;
+                    let insert = token.replacement;
+                    // once we do this, the "currentNode" is actually going to be any preceding content
+                    // as such, we will likely want to move it to the next sibling manually
+                    // obviously, if we are splitting things at the start of this node, we don't need to do
+                    // this
+                    let replacementNode = <Text>currentNode;
+                    if (splitLocation != 0) {
+                        let left = replacementNode; // currentNode;
+                        replacementNode = <Text>currentNode.splitText(splitLocation);
+                        console.log("Split [%s<-->%s]", left.textContent, replacementNode.textContent);
+                    }
+                    // we are now on our newly separated middle-ground.
+                    // we need to break off the replacement character itself
+                    // but only if our replacement actually moves beyond this node; if it ends it, we don't need anything more than this
+                    if (replacementNode.textContent.length > token.length) {
+                        let right = replacementNode.splitText(token.length);
+                        console.log("Split [%s<-->%s]", replacementNode.textContent, right.textContent);
+                    }
+                    // set our replacement text
+                    console.log("Replacing [%s] with [%s] content.", replacementNode.textContent, insert);
+                    replacementNode.textContent = insert;
+                    console.log("Compensating textOffset(%d)+%d = %d", textOffset, -token.lengthOffset, textOffset - token.lengthOffset);
+                    textOffset -= token.lengthOffset;
+                    /*
+                        Now comes the fun part.
+                        If we have a span for this character, we need to create a span with the appropriate style and replace this
+                        childNode with the span. To do that, we need to obtain the childNode that corresponds to the Text node.
 
-            /*
-                Our next step is taking the original element and determining the parent object of each relevant
-                text node while joining all of these together and inserting the name of the style to go with
-                the surrounding SPAN tag.
-            */
-            let styles: [[number, number], string, [Node, Node][]][] = [];
-            console.log(styles);
-            CollectStyles(SPAN_DOUBLE, doubleQuoteLocations, newNodes, styles);
-            CollectStyles(SPAN_SINGLE, singleQuoteLocations, newNodes, styles);
-            CollectStyles(SPAN_DOUBLE_RUNON, runOnLocations, newNodes, styles);
-            console.log(styles);
-            /*
-                Now that we have an array of the text nodes and their parents, we check to see if they all have
-                the same parent, as that simplifies things
-            */
-            let parent = null;
-            for (var i = 0; i < styles.length; i++) {
-                if (parent != null) {
-                    if (styles[i][2][2] != parent) {
-                        console.log("Parental mismatch!");
-                        console.log(styles);
-                        parent = null;
+                    */
+
+                    /*
+                        Even more fun. Now, we get to see if we are ending a span or starting one. If we are starting one,
+                        we need to create a span and insert the replacementNode and into the span, and add the span to
+                        the spanStack. Reset current node appropriately.
+
+                        We then need to add code that will plunk stuff into the span as appropriate as we move through
+                        until we close a span.
+
+                        If we are ending one, we pop the span stack, and move remainder (if any), outside of the span.
+                    */
+
+                    // once we've dealt with the token, we can move on to the next token
+                    tokenNum++;
+                } else {
+                    /*  Because tokens are added as they occur in the text, they should all be in order of appearance.
+                        As such, if the token is outside the current text node, we are safe to proceed to another text
+                        node.
+                    */
+                    console.log("Nothing to do in this text node.");
+                }
+                console.log("Adjusting textOffset(%d)+%d = %d", textOffset, currentNode.textContent.length, textOffset + currentNode.textContent.length);
+                textOffset += currentNode.textContent.length;
+            }
+            console.log("Moving to next sibling.");
+            // we have done all we can do with the current situation
+            // move on to the next sibling if there isn't one, otherwise
+            // we will move out to the previous parent and continue from there
+            // console.log(nodeStack);
+            let sibling = currentNode.nextSibling;
+            // console.log(sibling);
+            if (sibling != null) {
+                // if there is a sibling, add it to the stack
+                nodeStack.push(sibling);
+            } else {
+                console.log("Sibling is null. Moving to next available ancestor's sibling.");
+                let nextAncestor = nodeStack.pop();
+                // console.log(nextAncestor);
+                let maxLimit = 0;
+                while (nextAncestor != el) { // we don't want to get our main element's sibling
+                    // console.log(nodeStack);
+                    if (maxLimit > 10) {
+                        console.log("Something went wrong.");
+                        break;
+                    }
+                    maxLimit++;
+                    console.log("Obtained next ancestor. Testing siblings...");
+                    nextAncestor = nextAncestor.nextSibling;
+                    if (nextAncestor != null) {
+                        console.log("Ancestor had sibling. Pushed.");
+                        nodeStack.push(nextAncestor);
+                        break;
+                    } else {
+                        console.log("Ancestor has no siblings. Obtained next ancestor.");
+                        nextAncestor = nodeStack.pop();
                     }
                 }
-                parent = styles[i][2][2];
-            }
-            for (var i = 0; i < styles.length; i++) {
-                let range = styles[i][0];
-                let start = range[0];
-                let end = range[0];
-                
-            }
-            /*
-                Next we split the starting text node just before the opening quote. We mark the new text node as
-                the start. We split the ending text node just after the closing quote (or the end of the paragraph)
-                and mark that as the remainder.
-
-                We then insert all of the text nodes and parent elements (underneath the <p> or <h*> tag) into a
-                new span with the respective class.
-
-                We can then repeat this all for the next batch of quotes and then runons.
-            */
-        }
-
-    }
-};
-
-const CollectStyles = (style: string, locations: [number, number][], nodeMap: Map<[number, number], Node>, styles: [[number, number], string, [Node, Node][]][]) => {
-    if (nodeMap.size > 0) {
-        for (var i = 0; i < locations.length; i++) {
-            let range: [number, number] = locations[i];
-            let affectedNodes: Node[] = [];
-            var textNodes: [Node, Node][] = [];
-            let startLoc = range[0];
-            let endLoc = range[1];
-            let mapIter = nodeMap.keys();
-            let iterObj = mapIter.next();
-            let textRange = iterObj.value;
-            let start = textRange[0];
-            let end = textRange[1];
-            let textNode = nodeMap.get(textRange);
-            let offset = 0;
-            while (startLoc < start && startLoc >= end) {
-                // advance to the first node containing our text
-                iterObj = mapIter.next();
-                textRange = iterObj.value;
-                start = textRange[0];
-                end = textRange[1];
-                textNode = nodeMap.get(textRange);
-            }
-            affectedNodes.push(textNode);
-            while (endLoc > end) {
-                // if the ending location of our style exceeds the end spot for this text node, we advance to the next and add it
-                iterObj = mapIter.next();
-                if (iterObj.done) {
+                if (maxLimit > 10) {
                     break;
                 }
-                textRange = iterObj.value;
-                start = textRange[0];
-                end = textRange[1];
-                textNode = nodeMap.get(textRange);
-                affectedNodes.push(textNode);
+                console.log("Parent is parent element, no siblings accessible.");
             }
-            // if endLoc is now <= end, then our textNode has the end point we need
-            for (var j = 0; j < affectedNodes.length; j++) {
-                textNodes.push([affectedNodes[j], affectedNodes[j].parentNode]);
-            }
-            styles.push([range, style, textNodes]);
+            // otherwise we will move on.
         }
     }
-
 };
 
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
