@@ -89,17 +89,27 @@ const FindTokens = (text: string): ReplacementToken[] => {
     let lastChar = "";
     let extendedTokens = ["...", "---", "--"];
     let watchChars = ["'", '"', '-', '.'];
-
+    console.log("[%s]", text);
     for (var i = 0; i < text.length; i++) {
         let char = text[i];
+        // we want to make sure that if characters repeat, we watch out for the
+        // full sequence of them, for matching ..., ---, and --
+        // if they match and sequence is blank, we add both, else we just append current char
+        if (char == lastChar) {
+            sequence += sequence == "" ? char + lastChar : char;
+        } else {
+            sequence = "";
+        }
         // console.log("Checking char: %s[%s] (sequence: [%s])", lastChar, char, sequence);
-        if (extendedTokens.contains(sequence) && char != lastChar) {
+        if (extendedTokens.contains(sequence) && (char != lastChar || (char == lastChar && i + 1 >= text.length))) {
             // if our current character is not equal to our last character, then we have moved to a different sequence
+            // if we are at the end of the text, we have finished our sequence
             // thus if that sequence is equal to '...' '---' or '--', we can tag them as appropriate.
             // Note: we cannot resolve dashes without context
+            let loc = i + 1 >= text.length ? i + 1 : i;
             if (sequence == '...') {
                 let token: ReplacementToken = {
-                    location: i - 3, // it started 3 characters ago
+                    location: loc - 3, // it started 3 characters ago
                     resolved: true,
                     length: 3,
                     lengthOffset: -2, // we will be removing two characters from the raw text
@@ -116,7 +126,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
                 tokens.push(token);
             } else if (sequence == '---') {
                 let token: ReplacementToken = {
-                    location: i - 3, // it started 3 characters ago
+                    location: loc - 3, // it started 3 characters ago
                     resolved: false, // we need context; if &gt; or &lt; come before or after, we will discard this token
                     length: 3,
                     lengthOffset: -2, // we will be removing two characters from the raw text
@@ -133,7 +143,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
                 tokens.push(token);
             } else { // obviously it's '--'
                 let token: ReplacementToken = {
-                    location: i - 2, // it started 3 characters ago
+                    location: loc - 2, // it started 3 characters ago
                     resolved: false, // we need context same as for em-dashes; digits before and after will add hair space on either side
                     length: 2,
                     lengthOffset: -1, // we will be removing one character from the raw text
@@ -149,14 +159,6 @@ const FindTokens = (text: string): ReplacementToken[] => {
                 };
                 tokens.push(token);
             }
-        }
-        // we want to make sure that if characters repeat, we watch out for the
-        // full sequence of them, for matching ..., ---, and --
-        // if they match and sequence is blank, we add both, else we just append current char
-        if (char == lastChar) {
-            sequence += sequence == "" ? char + lastChar : char;
-        } else {
-            sequence = "";
         }
         if (watchChars.contains(char)) {
             if (char == '"' && !escaped) {
