@@ -216,10 +216,9 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
         ResolveTokens(rawText, tokens);
         //ProcessNode(el, 0, tokens, settings);
         let nodeStack: Node[] = [el];
-        let spanStack: Node[] = [];
+        let spanStack: HTMLElement[] = [];
         let textOffset = 0;
         let tokenNum = 0;
-        let endPoint = rawText.length;
         let ignoreTags = ["pre", "code"];
         let limit = 0;
         while (nodeStack.length > 0) {
@@ -252,76 +251,125 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                     token = tokens[tokenNum];
                 }
                 let textLength = currentNode.textContent.length;
+                let offsetAdjust = 0;
                 console.log("Token %d/%d", tokenNum + 1, tokens.length);
-                if (tokenNum < tokens.length) { console.log(token, token.location, textOffset, textLength, token.location - textOffset); }
+                if (tokenNum < tokens.length) { console.log("Token [%s]@%d - %d = %d for %d", token, token.location, textOffset, token.location - textOffset, textLength); }
                 if (tokenNum < tokens.length && token.location >= textOffset && token.location - textOffset < textLength) {
                     // If token.location is > or equal to textOffset - textLength, then the token belongs in another text node
                     console.log("Token is in this node.");
                     console.log("Replacing [%s] in [%s] from %d to %d.", token.original, currentNode.textContent, token.location - textOffset, token.location - textOffset + token.length);
+
                     let splitLocation = token.location - textOffset;
                     let insert = token.replacement;
-                    // once we do this, the "currentNode" is actually going to be any preceding content
-                    // as such, we will likely want to move it to the next sibling manually
-                    // obviously, if we are splitting things at the start of this node, we don't need to do
-                    // this
+
                     let replacementNode = <Text>currentNode;
+                    let rNode = currentNode;
+
+                    console.log("Replacement node acquired: %s", replacementNode);
                     if (splitLocation != 0) {
-                        let left = replacementNode; // currentNode;
-                        replacementNode = <Text>currentNode.splitText(splitLocation);
-                        console.log("Split [%s<-->%s]", left.textContent, replacementNode.textContent);
+                        replacementNode = <Text>currentNode.splitText(splitLocation); // this now starts with our token
+                        rNode = replacementNode; // need a non-TextNode reference for later
+                        // console.log("Replacement node split at %d: %s", splitLocation, replacementNode);
+                        // console.log("Split [%s<-->%s]", left.textContent, replacementNode.textContent);
                     }
                     // we are now on our newly separated middle-ground.
                     // we need to break off the replacement character itself
                     // but only if our replacement actually moves beyond this node; if it ends it, we don't need anything more than this
                     if (replacementNode.textContent.length > token.length) {
-                        let right = replacementNode.splitText(token.length);
-                        console.log("Split [%s<-->%s]", replacementNode.textContent, right.textContent);
+                        replacementNode.splitText(token.length); // split off remainder
+                        // console.log("Replacement node split at %d: %s", token.length, replacementNode);
+                        // console.log("Split [%s<-->%s]", replacementNode.textContent, right.textContent);
                     }
                     // set our replacement text
                     console.log("Replacing [%s] with [%s] content.", replacementNode.textContent, insert);
+                    /*
+                        If we have a span for this character, we need to create a span with the appropriate style and replace this
+                        childNode with the span.
+                    */
                     if (token.spanForChar) {
                         let span = document.createElement("span");
                         span.className = token.spanClassForChar;
                         span.appendChild(document.createTextNode(insert));
+                        console.log("Span created in place of text node.");
                         replacementNode.replaceWith(span);
+                        rNode = span; // our new rNode reference must be the span containing the text
+                        console.log(span.outerHTML);
+                        //console.log(span, span.parentNode, span.parentElement);
                         if (splitLocation == 0) {
-                            // our "current node" is the replacement node
+                            // our "current node" is the replacement node, so we need it to be amended to the span as well
                             currentNode = span;
                         }
                     } else {
+                        console.log("Replaced textContent of replacementNode with [%s]", insert);
                         replacementNode.textContent = insert;
                     }
                     console.log("Compensating textOffset(%d)+%d = %d", textOffset, -token.lengthOffset, textOffset - token.lengthOffset);
                     textOffset -= token.lengthOffset;
-                    /*
-                        Now comes the fun part.
-                        If we have a span for this character, we need to create a span with the appropriate style and replace this
-                        childNode with the span. To do that, we need to obtain the childNode that corresponds to the Text node.
+                    if (token.spanEnd && spanStack.length > 0) {
+                        console.log("Popping span off stack");
+                        let span = spanStack.pop();
+                        console.log(span.outerHTML);
+                        // The span ends after and including our replacement, so the current node, with preceding content, and our
+                        // replacement node (if different) needs to be added to the span
+                        span.appendChild(currentNode);
+                        if (rNode != currentNode) {
+                            span.appendChild(rNode);
+                        }
+                        console.log("Appended current node" + (rNode != currentNode) ? "and replacement node." : ".");
+                    }
+                    if (token.spanStart && false) {
+                        // if our span starts, create it, set its class, push it onto the stack
+                        console.log("Creating span.");
+                        let span = document.createElement("span");
+                        span.className = token.spanClass;
+                        if (rNode == currentNode) {
+                            console.log("Replacement node is current node, inserting span before current node.");
+                            currentNode.parentNode.insertBefore(span, currentNode);
+                        } else {
+                            console.log("Replacement node is after current node, inserting span before replacement node.");
+                            console.log(rNode.outerHTML);
+                            console.log(rNode.parentNode.outerHTML);
+                            console.log("Inserting.... Done.")
+                            rNode.parentNode.insertBefore(span, rNode);
+                            console.log(rNode.parentNode.outerHTML);
+                        }
+                        console.log("Pushing span.");
+                        console.log(span.outerHTML);
+                        spanStack.push(span);
+                        nodeStack.push(span);
+                    }
 
-                    */
-
-                    /*
-                        Even more fun. Now, we get to see if we are ending a span or starting one. If we are starting one,
-                        we need to create a span and insert the replacementNode and into the span, and add the span to
-                        the spanStack. Reset current node appropriately.
-
-                        We then need to add code that will plunk stuff into the span as appropriate as we move through
-                        until we close a span.
-
-                        If we are ending one, we pop the span stack, and move remainder (if any), outside of the span.
-                    */
-
-                    // once we've dealt with the token, we can move on to the next token
+                    if (spanStack.length > 0) {
+                        // we need to move stuff into the span
+                        console.log("We have open spans. Adding current node to top span.");
+                        let span = spanStack[spanStack.length - 1];
+                        console.log(span.outerHTML);
+                        if (rNode == currentNode) {
+                            span.appendChild(currentNode);
+                        }
+                        console.log("-->");
+                        console.log(span.outerHTML);
+                    }
                     tokenNum++;
                 } else {
                     /*  Because tokens are added as they occur in the text, they should all be in order of appearance.
                         As such, if the token is outside the current text node, we are safe to proceed to another text
                         node.
                     */
-                    console.log("Nothing to do in this text node.");
+                    console.log("No replacements for this text node.");
+                    if (spanStack.length > 0) {
+                        // we need to move stuff into the span
+                        console.log("But we have open spans. Adding current node to top span.");
+                        let span = spanStack[spanStack.length - 1];
+                        span.appendChild(currentNode);
+                    }
+
                 }
-                console.log("Adjusting textOffset(%d)+%d = %d", textOffset, currentNode.textContent.length, textOffset + currentNode.textContent.length);
+                console.log("Adjusting textOffset(%d)+%d = %d", textOffset, offsetAdjust, textOffset + offsetAdjust);
                 textOffset += currentNode.textContent.length;
+                if (spanStack.length > 0) {
+                    currentNode = spanStack[spanStack.length - 1];
+                }
             }
             console.log("Moving to next sibling.");
             // we have done all we can do with the current situation
@@ -359,7 +407,9 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                 if (maxLimit > 10) {
                     break;
                 }
-                console.log("Parent is parent element, no siblings accessible.");
+                if (nextAncestor == el) {
+                    console.log("Parent is parent element, no siblings accessible.");
+                }
             }
             // otherwise we will move on.
         }
