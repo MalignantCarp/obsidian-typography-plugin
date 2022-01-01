@@ -1,4 +1,5 @@
 import { App, MarkdownPostProcessor, MarkdownPostProcessorContext, MarkdownPreviewRenderer, MarkdownRenderer, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { QUOTE_PRESETS } from './quotes';
 import TypographySettingsTab from './settings';
 import { TypographySettings } from './types';
 import { typography } from './typography';
@@ -12,6 +13,9 @@ const DEFAULT_SETTINGS: TypographySettings = {
     colorDoubleQuotes: true,
     colorMismatchedDoubleQuotes: true,
     colorSingleQuotes: true,
+    doubleQuotePreset: QUOTE_PRESETS[0],
+    doubleQuoteOpen: "\u201C",
+    doubleQuoteClose: "\u201D"
     // colorMismatchedSingleQuotes: true
 };
 

@@ -1,5 +1,5 @@
 import { ReplacementToken, TypographySettings } from "./types";
-import { FindRawText, FindTokens, FindTokensFaster, ResolveTokens } from "./text";
+import { CLASS_SEQ_DOUBLE, CLASS_SEQ_DOUBLE_RUN, CLASS_SEQ_SINGLE, FindRawText, FindTokens, FindTokensFaster, ResolveTokens } from "./text";
 
 /*
 apostrophe = right single quote = &rsquo; = \u2019
@@ -46,7 +46,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
     
         let FTST = Date.now();
     
-        let FTTokens = FindTokens(rawText);
+        let FTTokens = FindTokens(rawText, settings);
         for (var i = 0; i < times; i++) {
             FindTokens(rawText);
         }
@@ -54,7 +54,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
         let FTET = Date.now();
     
         let FTFST = Date.now();
-        let FTFTokens = FindTokensFaster(rawText);
+        let FTFTokens = FindTokensFaster(rawText, settings);
         for (var i = 0; i < times; i++) {
             FindTokensFaster(rawText);
         }
@@ -65,11 +65,11 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
         console.log("FindTokensFaster() found %s tokens x %s in %d seconds (%d/tokens per second)", FTFTokens.length, times, FTFET - FTFST, (FTFTokens.length * times) / (FTFET - FTFST));
         return;
      */
-    let tokens = FindTokensFaster(rawText);
+    let tokens = FindTokensFaster(rawText, settings);
     // console.log("%d token(s)", tokens.length);
     if (tokens.length > 0) {
         // console.log(rawText, tokens);
-        ResolveTokens(rawText, tokens);
+        ResolveTokens(rawText, tokens, settings);
         //ProcessNode(el, 0, tokens, settings);
         let spanStack: HTMLElement[] = [];
         let textOffset = 0;
@@ -209,7 +209,6 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                         spanStack.push(span);
                         span.appendChild(rNode);
                     }
-
                     tokenNum++;
                 } else {
                     // console.log("No replacements for this text node.");

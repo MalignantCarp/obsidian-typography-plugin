@@ -1,3 +1,5 @@
+import { Quote } from "./quotes";
+
 export interface TypographySettings {
     dashes: boolean;
     singleQuotes: boolean;
@@ -7,6 +9,9 @@ export interface TypographySettings {
     colorDoubleQuotes: boolean;
     colorMismatchedDoubleQuotes: boolean;
     colorSingleQuotes: boolean;
+    doubleQuotePreset: Quote;
+    doubleQuoteOpen: string;
+    doubleQuoteClose: string;
 //    colorMismatchedSingleQuotes: boolean;
 }
 

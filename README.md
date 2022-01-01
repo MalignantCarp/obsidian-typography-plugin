@@ -14,17 +14,16 @@ Double quotes are styled based on simple criteria: they open and close within a 
 
 Single quotes are a little more complicated. Because of plural possessives and contractions that can wholly omit the start and/or end of a word, it is a little more challenging to make the determination of what is or is not a block surrounding by single quotes. In most cases, the regular expression used to make that determination will be correct, but situations involving certain contractions or plural possessives can result in the block being terminated early.
 
-Once the single quotes are figured out, the remaining straight apostrophes are turned into right single quotes.
+Once the single quotes are figured out, the remaining straight apostrophes are turned into right single quotes/apostrophes.
+
+You can set your own custom double quotes in the options. Currently defaults to standard North American double quotes with options for guillemets and inverted guillemets.
 
 ### Highlighting
 The plugin also allows for highlighting of double and single quoted blocks, including borders, with alternating borders for when a single quote block is in a double quote block and vice versa. Due to certainly limitations surrounding single quote recognition, it is generally not recommended that single quote blocks be highlighted if they will occur within double quote blocks. It may be desirable to use the same colors for each.
 
-## Known Issues
- - Certain combinations of tags and links will prevent a line from being styled correctly.
- - Certain cominations of list items will prevent a line from being styled correctly.
- - In Obisidian v0.13.14, transclusions/internal embeds are no longer rendered and certain task list items are replicated as regular list items.
-
-The above issues will be solved after a rewrite replacing code that current modifies the HTML of the DOM to actually modifying the DOM itself. Sadly, this upgrade is taking longer than anticipated.
+## Known Issues / Limitations
+ - Some single quote blocks end prematurely due to apostrophes that are placed after a word (plural possessive or contractions e.g., runnin').
+ - Styling or quotation blocks is incorrect if other style information begins inside but ends outside or begins outside and ends inside that quotation block.
 
 ## Installation
 Right now, this is not in Community Plugins, so you will want to use Obsidian BRAT to install, or manually download the release and install it in your vault's .obsidian folder in plugins/obsidian-typography-plugin.

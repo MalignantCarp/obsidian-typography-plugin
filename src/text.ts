@@ -1,4 +1,4 @@
-import { ReplacementToken } from "./types";
+import { ReplacementToken, TypographySettings } from "./types";
 
 const UNI_SINGLE_OPEN = "\u2018";
 const UNI_SINGLE_CLOSE = "\u2019";
@@ -18,9 +18,9 @@ const CLASS_CHAR_DQ_CLOSE = "OTPTokenDQClose";
 const CLASS_CHAR_SQ_OPEN = "OTPTokenSQOpen";
 const CLASS_CHAR_SQ_CLOSE = "OTPTokenSQClose";
 
-const CLASS_SEQ_DOUBLE = "doubleQuote";
-const CLASS_SEQ_DOUBLE_RUN = "doubleQuoteRunon";
-const CLASS_SEQ_SINGLE = "singleQuote";
+export const CLASS_SEQ_DOUBLE = "doubleQuote";
+export const CLASS_SEQ_DOUBLE_RUN = "doubleQuoteRunon";
+export const CLASS_SEQ_SINGLE = "singleQuote";
 
 const NOT_FOR_DASHES = ["&gt;", "&lt;", "<", ">"]; // sequences and characters that can be before or after hyphens that will prevent them from becoming dashes
 
@@ -79,7 +79,7 @@ const FindDQs = (text: string): number[] => {
 const FindSQs = (text: string): number[] => {
     let locations: number[] = [];
 
-    let finder = /('(?!\s)[^\n\r"]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[\p{L}\p{N} ]*?(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s).*'$)/mug;
+    let finder = /('(?!\s)[^\n\r"]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[\p{L}\p{N} ]*?(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s).*'$)|('[^\s]*?')/mug;
     let match;
     while ((match = finder.exec(text)) !== null) {
         let matchText = text.slice(match.index, finder.lastIndex);
@@ -134,8 +134,12 @@ const FindEmDashes = (text: string): number[] => {
 
 };
 
-const FindTokensFaster = (text: string): ReplacementToken[] => {
+const FindTokensFaster = (text: string, settings: TypographySettings): ReplacementToken[] => {
     let tokens: ReplacementToken[] = [];
+    if (!(settings.apostrophes || settings.singleQuotes || settings.doubleQuotes || settings.dashes || settings.ellipses)) {
+        // if we're not searching for any of these things, we're done.
+        return tokens;
+    }
 
     let locations: [number, string][] = [];
 
@@ -145,23 +149,23 @@ const FindTokensFaster = (text: string): ReplacementToken[] => {
     let ens = FindEnDashes(text);
     let ems = FindEmDashes(text);
 
-    for (var i = 0; i < dqs.length; i++) {
+    for (var i = 0; i < dqs.length && settings.doubleQuotes; i++) {
         locations.push([dqs[i], '"']);
     }
 
-    for (var i = 0; i < apos.length; i++) {
+    for (var i = 0; i < apos.length && (settings.apostrophes || settings.singleQuotes); i++) {
         locations.push([apos[i], "'"]);
     }
 
-    for (var i = 0; i < ell.length; i++) {
+    for (var i = 0; i < ell.length && settings.ellipses; i++) {
         locations.push([ell[i], '...']);
     }
 
-    for (var i = 0; i < ens.length; i++) {
+    for (var i = 0; i < ens.length && settings.dashes; i++) {
         locations.push([ens[i], '--']);
     }
 
-    for (var i = 0; i < ems.length; i++) {
+    for (var i = 0; i < ems.length && settings.dashes; i++) {
         locations.push([ems[i], '---']);
     }
 
@@ -173,6 +177,14 @@ const FindTokensFaster = (text: string): ReplacementToken[] => {
 
     let dqStack: ReplacementToken[] = [];
 
+    let dqOpen = settings.doubleQuotePreset.open;
+    let dqClose = settings.doubleQuotePreset.close;
+    if (dqOpen == null) {
+        dqOpen = settings.doubleQuoteOpen == null ? UNI_DOUBLE_OPEN : settings.doubleQuoteOpen;
+    }
+    if (dqClose == null) {
+        dqClose = settings.doubleQuoteClose == null ? UNI_DOUBLE_CLOSE : settings.doubleQuoteClose;
+    }
     for (var i = 0; i < locations.length; i++) {
         let [loc, sequence] = locations[i];
         if (sequence == '...') {
@@ -232,10 +244,10 @@ const FindTokensFaster = (text: string): ReplacementToken[] => {
                 location: loc,
                 resolved: isClosing, // if we are closing, we know that we are
                 length: 1,
-                lengthOffset: 0,
+                lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length -1,
                 original: '"',
-                replacement: isClosing ? UNI_DOUBLE_CLOSE : UNI_DOUBLE_OPEN,
-                spanStart: !isClosing,
+                replacement: isClosing ? dqClose : dqOpen,
+                spanStart: !isClosing && settings.colorDoubleQuotes,
                 spanClass: CLASS_SEQ_DOUBLE,
                 spanEnd: isClosing,
                 spanForChar: true,
@@ -273,10 +285,16 @@ const FindTokensFaster = (text: string): ReplacementToken[] => {
             tokens.push(token);
         }
     }
+    if (dqStack.length > 0) {
+        let token = dqStack.pop();
+        token.spanStart = settings.colorMismatchedDoubleQuotes;
+        token.spanClass = settings.colorMismatchedDoubleQuotes ? CLASS_SEQ_DOUBLE_RUN : CLASS_SEQ_DOUBLE;
+        token.resolved = true; // this is now resolved
+    }
     return tokens;
 };
 
-const FindTokens = (text: string): ReplacementToken[] => {
+const FindTokens = (text: string, settings: TypographySettings): ReplacementToken[] => {
     /*  This function returns an array of ReplacementTokens found within the provided text. These tokens
         will then need to be fully resolved and then can be used to replace text content within the DOM.
         The tokens indicate when a span should be opened or closed and the class, as well as if a span
@@ -287,6 +305,10 @@ const FindTokens = (text: string): ReplacementToken[] => {
         the closing quote, with the exception of a double quote that is not closed).
     */
     let tokens: ReplacementToken[] = [];
+    if (!(settings.apostrophes || settings.singleQuotes || settings.doubleQuotes || settings.dashes || settings.ellipses)) {
+        // if we're not searching for any of these things, we're done.
+        return tokens;
+    }
     let sequence = "";
     /*
         Double quotes are the simplest to parse. Since we're operating on individual paragraphs,
@@ -301,6 +323,14 @@ const FindTokens = (text: string): ReplacementToken[] => {
     let extendedTokens = ["...", "---", "--"];
     let watchChars = ["'", '"', '-', '.'];
     // console.log("[%s]", text);
+    let dqOpen = settings.doubleQuotePreset.open;
+    let dqClose = settings.doubleQuotePreset.close;
+    if (dqOpen == null) {
+        dqOpen = settings.doubleQuoteOpen == null ? UNI_DOUBLE_OPEN : settings.doubleQuoteOpen;
+    }
+    if (dqClose == null) {
+        dqClose = settings.doubleQuoteClose == null ? UNI_DOUBLE_CLOSE : settings.doubleQuoteClose;
+    }
     for (var i = 0; i < text.length; i++) {
         let char = text[i];
         // we want to make sure that if characters repeat, we watch out for the
@@ -317,7 +347,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
             // thus if that sequence is equal to '...' '---' or '--', we can tag them as appropriate.
             // Note: we cannot resolve dashes without context
             let loc = i + 1 >= text.length ? i + 1 : i;
-            if (sequence == '...') {
+            if (sequence == '...' && settings.ellipses) {
                 let token: ReplacementToken = {
                     location: loc - 3, // it started 3 characters ago
                     resolved: true,
@@ -334,7 +364,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
                     closer: null,
                 };
                 tokens.push(token);
-            } else if (sequence == '---') {
+            } else if (sequence == '---' && settings.dashes) {
                 let token: ReplacementToken = {
                     location: loc - 3, // it started 3 characters ago
                     resolved: false, // we need context; if &gt; or &lt; come before or after, we will discard this token
@@ -351,7 +381,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
                     closer: null,
                 };
                 tokens.push(token);
-            } else { // obviously it's '--'
+            } else if (settings.dashes) { // obviously it's '--'
                 let token: ReplacementToken = {
                     location: loc - 2, // it started 3 characters ago
                     resolved: false, // we need context same as for em-dashes; digits before and after will add hair space on either side
@@ -371,16 +401,16 @@ const FindTokens = (text: string): ReplacementToken[] => {
             }
         }
         if (watchChars.contains(char)) {
-            if (char == '"' && !escaped) {
+            if (char == '"' && !escaped && settings.doubleQuotes) {
                 let isClosing = dqStack.length == 1; // If there is a double quote on the stack, we are closing that quotation.
                 let token: ReplacementToken = {
                     location: i,
                     resolved: isClosing, // if we are closing, we know that we are
                     length: 1,
-                    lengthOffset: 0,
+                    lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length -1,
                     original: '"',
-                    replacement: isClosing ? UNI_DOUBLE_CLOSE : UNI_DOUBLE_OPEN,
-                    spanStart: !isClosing,
+                    replacement: isClosing ? dqClose : dqOpen,
+                    spanStart: !isClosing && settings.colorDoubleQuotes,
                     spanClass: CLASS_SEQ_DOUBLE,
                     spanEnd: isClosing,
                     spanForChar: true,
@@ -425,7 +455,8 @@ const FindTokens = (text: string): ReplacementToken[] => {
     }
     if (dqStack.length > 0) {
         let token = dqStack.pop();
-        token.spanClass = CLASS_SEQ_DOUBLE_RUN;
+        token.spanStart = settings.colorMismatchedDoubleQuotes;
+        token.spanClass = settings.colorMismatchedDoubleQuotes ? CLASS_SEQ_DOUBLE_RUN : CLASS_SEQ_DOUBLE;
         token.resolved = true; // this is now resolved
     }
     return tokens;
@@ -479,7 +510,7 @@ const GetContext = (text: string, index: number, width: number, context: number)
     return [before, seq, after];
 };
 
-const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
+const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: TypographySettings) => {
     /*  This method proceeds through the list of tokens and resolves them by utilizing context
         retrieved using GetContext() based on the ReplacementToken's location. It is only run
         when the ReplacementToken.resolved == false
@@ -528,6 +559,10 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
                     || (IsNumber(charBefore) && IsNumber(charAfter))
                     || (/\s/.test(charBefore) && /\s/.test(charAfter))
                     || ((!/\p{L}|\p{P}/.test(charBefore) || charBefore == "" || /\s/.test(charBefore)) && /(?=\d\ds?)(?!\d\ds?')/gum.test(after))) {
+                    if (!settings.apostrophes) {
+                        rejects.push(i);
+                        continue;
+                    }
                     token.resolved = true;
                     token.replacement = UNI_SINGLE_CLOSE;
                     token.spanStart = false;
@@ -547,9 +582,13 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
                 let singleOpen = sqStack.length == 1;
                 if (!singleOpen && sqs.contains(token.location)) {
                     // console.log("Opening: [%s] [%s] [%s]", before, char, after)
+                    if (!settings.singleQuotes) {
+                        rejects.push(i);
+                        continue;
+                    }
                     token.resolved = false;
                     token.replacement = UNI_SINGLE_OPEN;
-                    token.spanStart = true;
+                    token.spanStart = true && settings.colorSingleQuotes;
                     token.spanClass = CLASS_SEQ_SINGLE;
                     token.spanEnd = false;
                     token.spanForChar = true;
@@ -559,10 +598,14 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
                 }
                 if (singleOpen && sqs.contains(token.location)) {
                     // console.log("Closing: [%s] [%s] [%s]", before, char, after)
+                    if (!settings.singleQuotes) {
+                        rejects.push(i);
+                        continue;
+                    }
                     token.resolved = true;
                     token.replacement = UNI_SINGLE_CLOSE;
                     token.spanStart = false;
-                    token.spanEnd = true;
+                    token.spanEnd = true && settings.colorSingleQuotes;
                     token.spanForChar = true;
                     token.spanClassForChar = CLASS_CHAR_SQ_CLOSE;
                     token.opener = sqStack.pop();
@@ -571,6 +614,10 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
                     continue;
                 }
                 // console.log("Apostrophe[%s]: [%s] [%s] [%s]", !sqs.contains(token.location), before, char, after);
+                if (!settings.apostrophes) {
+                    rejects.push(i);
+                    continue;
+                }
                 token.resolved = true;
                 token.replacement = UNI_SINGLE_CLOSE;
                 token.spanStart = false;
