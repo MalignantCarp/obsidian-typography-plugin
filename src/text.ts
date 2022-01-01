@@ -65,6 +65,217 @@ const FindRawText = (el: Node): string => {
     return rawText;
 };
 
+const FindDQs = (text: string): number[] => {
+    let locations: number[] = [];
+
+    let finder = /"/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const FindSQs = (text: string): number[] => {
+    let locations: number[] = [];
+
+    let finder = /('(?!\s)[^\n\r"]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[\p{L}\p{N} ]*?(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s).*'$)/mug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        let matchText = text.slice(match.index, finder.lastIndex);
+        //console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
+        locations.push(match.index);
+        if (matchText[matchText.length - 1] == "'") { locations.push(finder.lastIndex - 1); };
+    }
+    // console.log(locations);
+    return locations;
+};
+
+const FindDumbApos = (text: string): number[] => {
+    let locations: number[] = [];
+
+    let finder = /'/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const FindEllipses = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /\.\.\./ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+
+};
+
+const FindEnDashes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /(?<!-)--(?!-)/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const FindEmDashes = (text: string): number[] => {
+    let locations: number[] = [];
+    let finder = /(?<!-)---(?!-)/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+
+};
+
+const FindTokensFaster = (text: string): ReplacementToken[] => {
+    let tokens: ReplacementToken[] = [];
+
+    let locations: [number, string][] = [];
+
+    let dqs = FindDQs(text);
+    let apos = FindDumbApos(text);
+    let ell = FindEllipses(text);
+    let ens = FindEnDashes(text);
+    let ems = FindEmDashes(text);
+
+    for (var i = 0; i < dqs.length; i++) {
+        locations.push([dqs[i], '"']);
+    }
+
+    for (var i = 0; i < apos.length; i++) {
+        locations.push([apos[i], "'"]);
+    }
+
+    for (var i = 0; i < ell.length; i++) {
+        locations.push([ell[i], '...']);
+    }
+
+    for (var i = 0; i < ens.length; i++) {
+        locations.push([ens[i], '--']);
+    }
+
+    for (var i = 0; i < ems.length; i++) {
+        locations.push([ems[i], '---']);
+    }
+
+    locations = locations.sort((a, b) => {
+        return a[0] - b[0];
+    });
+
+    // console.log(locations);
+
+    let dqStack: ReplacementToken[] = [];
+
+    for (var i = 0; i < locations.length; i++) {
+        let [loc, sequence] = locations[i];
+        if (sequence == '...') {
+            let token: ReplacementToken = {
+                location: loc,
+                resolved: true,
+                length: 3,
+                lengthOffset: -2, // we will be removing two characters from the raw text
+                original: '...',
+                replacement: UNI_HORIZ_ELLIPSIS,
+                spanStart: false,
+                spanClass: null,
+                spanEnd: false,
+                spanForChar: false,
+                spanClassForChar: null,
+                opener: null,
+                closer: null,
+            };
+            tokens.push(token);
+        } else if (sequence == '---') {
+            let token: ReplacementToken = {
+                location: loc,
+                resolved: false, // we need context; if &gt; or &lt; come before or after, we will discard this token
+                length: 3,
+                lengthOffset: -2, // we will be removing two characters from the raw text
+                original: '---',
+                replacement: UNI_EM_DASH,
+                spanStart: false,
+                spanClass: null,
+                spanEnd: false,
+                spanForChar: false,
+                spanClassForChar: null,
+                opener: null,
+                closer: null,
+            };
+            tokens.push(token);
+        } else if (sequence == '--') { // obviously it's '--'
+            let token: ReplacementToken = {
+                location: loc,
+                resolved: false, // we need context same as for em-dashes; digits before and after will add hair space on either side
+                length: 2,
+                lengthOffset: -1, // we will be removing one character from the raw text
+                original: '--',
+                replacement: UNI_EN_DASH,
+                spanStart: false,
+                spanClass: null,
+                spanEnd: false,
+                spanForChar: false,
+                spanClassForChar: null,
+                opener: null,
+                closer: null,
+            };
+            tokens.push(token);
+        } else if (sequence == '"') {
+            let isClosing = dqStack.length == 1; // If there is a double quote on the stack, we are closing that quotation.
+            let token: ReplacementToken = {
+                location: loc,
+                resolved: isClosing, // if we are closing, we know that we are
+                length: 1,
+                lengthOffset: 0,
+                original: '"',
+                replacement: isClosing ? UNI_DOUBLE_CLOSE : UNI_DOUBLE_OPEN,
+                spanStart: !isClosing,
+                spanClass: CLASS_SEQ_DOUBLE,
+                spanEnd: isClosing,
+                spanForChar: true,
+                spanClassForChar: isClosing ? CLASS_CHAR_DQ_CLOSE : CLASS_CHAR_DQ_OPEN,
+                opener: isClosing ? dqStack.pop() : null, // If there is a double quote on the stack, that is what this one is closing, so that is our opener
+                closer: null, // we don't know who the closer is
+            };
+            if (!isClosing) { // if we are not closing our current double quote, we will push this one onto the stack
+                dqStack.push(token);
+            } else {
+                //if we are closing, we can set the closer for our opener
+                token.opener.closer = token;
+                // and set it to resolved
+                token.opener.resolved = true;
+            }
+            tokens.push(token);
+        } else if (sequence == "'") {
+            /* We need full context to determine whether this is an apostrophe or a single quote, so will defer resolution
+            */
+            let token: ReplacementToken = {
+                location: loc,
+                resolved: false,
+                length: 1,
+                lengthOffset: 0,
+                original: "'",
+                replacement: null,
+                spanStart: null,
+                spanClass: null,
+                spanEnd: null,
+                spanForChar: null,
+                spanClassForChar: null,
+                opener: null,
+                closer: null,
+            };
+            tokens.push(token);
+        }
+    }
+    return tokens;
+};
+
 const FindTokens = (text: string): ReplacementToken[] => {
     /*  This function returns an array of ReplacementTokens found within the provided text. These tokens
         will then need to be fully resolved and then can be used to replace text content within the DOM.
@@ -89,7 +300,7 @@ const FindTokens = (text: string): ReplacementToken[] => {
     let lastChar = "";
     let extendedTokens = ["...", "---", "--"];
     let watchChars = ["'", '"', '-', '.'];
-    console.log("[%s]", text);
+    // console.log("[%s]", text);
     for (var i = 0; i < text.length; i++) {
         let char = text[i];
         // we want to make sure that if characters repeat, we watch out for the
@@ -277,6 +488,8 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
         by &gt; or &lt; can be added to rejects, which will be removed from the list
     */
     let rejects: number[] = [];
+    let sqStack: ReplacementToken[] = [];
+    let sqs = FindSQs(text);
     // console.log("Resolving tokens...");
     for (var i = 0; i < tokens.length; i++) {
         let token = tokens[i];
@@ -309,7 +522,7 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
             } else if (char === "'") {
                 // the dreaded dumb apostrophe
                 // we have some quick checks to see if this is a legitimate apostrophe vs a single
-                // opening or closing quote
+                // opening or closing quote; in these cases, we definitely have an apostrophe
 
                 if ((IsLetter(charBefore) && IsLetter(charAfter))
                     || (IsNumber(charBefore) && IsNumber(charAfter))
@@ -323,83 +536,45 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
                     continue;
                 }
                 /*
-                    We have now resolved all we know to be actual apostrophes.
-                    We now have to guess which ones are single opening and closing quotes
-                    and then all that remain must be apostrophes
+                        We have now resolved all we know to be actual apostrophes.
+                        We now have to guess which ones are single opening and closing quotes
+                        and then all that remain must be apostrophes
 
-                    Finding single quotes is rather troublesome. The best regex was as follows by highest to lowest specificity:
+                        We're going to use our new regex expression, which has a decent accuracy. It's not perfect
+                        by any stretch, but there is no perfection with dumb apostrophes.
 
-                    /('[^\n\r"]*?\p{P}(?<!")')|('[\p{L}\p{N} ]*?')|('[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!")')/mug;
-
-                    The first group is ('[^\n\r"]*?\p{P}(?<!")').
-                    The rule is thus: Match any text between dumb apos that:
-                    Is 0 or more non-newline non-quote characters followed by a punctuation mark that is not a double quote
-
-                    The second group is ('[\p{L}\p{N} ]*?'). It could probably be extended to ('[\p{L}\p{N} -]*?')
-                    The rule is thus: Match any text between dumb apos that:
-                    Is a letter, number, or space. (We could add hyphens as well, technically.)
-
-                    The third group is ('[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!")')
-                    The rule is thus: Match any text between dumb apos that:
-                    Begins with one or more non-newline characters followed by a space,
-                    followed by a statement in double quotes (the statement can contain anything),
-                    followed by a space, then a non-newline character, then punctuation that is not a double quote.
-
-                    This will require an enormous amount of context around the statements to adequately determine that they
-                    have matched these rules. It is probably best to integrate somewhere that we just runs the regex tests no the text
-                    and test for them in here, rather than trying to scan the text to and fro.
-
-                    But let's do the thinking experiment.
-
-                    So first we could check: if there is a space or nothing before and a number after, we're probably an
-                    opening quote. The logic behind this is that we've already made apostrophes out of everything that
-                    would otherwise be before a digit, thus it stands to reason that if there is a number preceded by
-                    a dumb apo, it is probably an opening single quote.
-
-                    If we have an opening quote, we probably have a closing quote, but there's no proper logical check for that.
-
-                    A single quote that immediately follows punctuation that is not a double quote is pretty much guaranteed to be
-                    a closing quote.
-
-                    If it's at the end of a line, it is a closing quote.
-
-                    So let's break down where and when each can or cannot occur so we can determine some logical statements:
-
-                    Open Single Quote:
-                    - Cannot be followed by whitespace of any kind. (It will always start a statement.)
-                    - Cannot end a line.
-                    - Can start a line (useless, as an apostrophe can as well)
-                    - Cannot follow terminal punctuation (e.g., .,?!) or closing punctuation
-                    - Cannot follow an open single quote
-                    - Can follow a space (but so can an apostrophe, so useless)
-
-                    Close Single Quote:
-                    - Can end a line.
-                    - Can start a line (useless)
-                    - Can follow terminal punctuation
-                    - Cannot follow a space (but an apostrophe can, so useless)
-                    - Cannot be followed immediately by a non-space, non-punctuation character
-                        - This would be either an apostrophe or a single open quote
-                        - If this follows another dumb apo, then this is an apostrophe not a closing single quote
-                    - Will follow a number if also followed by whitespace
-
-                    
-                    Basic logic from the above:
-                     - If there is no context after, we have a closing quote.
-                     - If terminal punctuation or closing punctuation is immediately before, we have a closing quote.
-                     - If there is a dumb apo before and a non-space, non-punctuation character after, it is an apostrophe.
-                     - If there is a dumb apo before and a space after, it is a closing single quote.
-                     - If there is a dumb apo after but not before, it is an opening single quote.
-                     - If there is a number after, this is an open single quote
-                        - Remember we will have already resolved an entry in the form of '90s or '96, so this is not that.
-                     - If there is a number before and a space after, this is a closing single quote
-
-
-                    None of this logic helps us with 'n' - technically, this can be indicating the letter N, or it could be 
-                    a contraction of the word and, with both a and d ommitted. In the first case, it would be an open first
-                    and a close second, in the second case, it would be both apostrophes.
-
-                */
+                    */
+                let singleOpen = sqStack.length == 1;
+                if (!singleOpen && sqs.contains(token.location)) {
+                    // console.log("Opening: [%s] [%s] [%s]", before, char, after)
+                    token.resolved = false;
+                    token.replacement = UNI_SINGLE_OPEN;
+                    token.spanStart = true;
+                    token.spanClass = CLASS_SEQ_SINGLE;
+                    token.spanEnd = false;
+                    token.spanForChar = true;
+                    token.spanClassForChar = CLASS_CHAR_SQ_OPEN;
+                    sqStack.push(token);
+                    continue;
+                }
+                if (singleOpen && sqs.contains(token.location)) {
+                    // console.log("Closing: [%s] [%s] [%s]", before, char, after)
+                    token.resolved = true;
+                    token.replacement = UNI_SINGLE_CLOSE;
+                    token.spanStart = false;
+                    token.spanEnd = true;
+                    token.spanForChar = true;
+                    token.spanClassForChar = CLASS_CHAR_SQ_CLOSE;
+                    token.opener = sqStack.pop();
+                    token.opener.resolved = true;
+                    token.opener.closer = token;
+                    continue;
+                }
+                // console.log("Apostrophe[%s]: [%s] [%s] [%s]", !sqs.contains(token.location), before, char, after);
+                token.resolved = true;
+                token.replacement = UNI_SINGLE_CLOSE;
+                token.spanStart = false;
+                token.spanEnd = false;
             }
         }
         // console.log(token.resolved ? "Resolved token." : "Failed to resolve token", token);
@@ -416,4 +591,4 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[]) => {
     }
 };
 
-export { FindRawText, FindTokens, ResolveTokens };
+export { FindRawText, FindTokens, ResolveTokens, FindTokensFaster };
