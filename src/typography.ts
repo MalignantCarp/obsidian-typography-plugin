@@ -92,7 +92,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                     let elementText = FindRawText(currentNode);
                     let token = spanTokens[spanTokens.length-1];
                     let span = spanStack[spanStack.length-1];
-                    if (token.closer.location > elementText.length + textOffset && !span.contains(currentNode)) {
+                    if (token.closer != null && token.closer.location > elementText.length + textOffset && !span.contains(currentNode)) {
                         span.appendChild(currentNode);
                     }
                 }
