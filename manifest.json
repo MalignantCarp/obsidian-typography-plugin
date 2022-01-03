@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-typography-plugin",
 	"name": "Obsidian Typography Plugin",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"minAppVersion": "0.13.14",
 	"description": "This is a plugin for Obsidian (https://obsidian.md) that produces advanced typography in the preview window.",
 	"author": "Ryan Fitzgerald",

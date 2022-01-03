@@ -51,10 +51,14 @@ const FindRawText = (el: Node): string => {
 
         let ignore = ["pre", "code"];
 
-        if (child.nodeType == child.ELEMENT_NODE && !ignore.contains(child.nodeName.toLowerCase())) {
+        if (child.nodeType == child.ELEMENT_NODE) {
             let childText = FindRawText(child);
             if (childText) {
-                rawText += childText;
+                if (ignore.contains(child.nodeName.toLowerCase())) {
+                    rawText += " ".repeat(childText.length);
+                } else {
+                    rawText += childText;
+                }
             }
         } else if (child.nodeType == child.TEXT_NODE) {
             rawText += child.nodeValue;
@@ -79,11 +83,13 @@ const FindDQs = (text: string): number[] => {
 const FindSQs = (text: string): number[] => {
     let locations: number[] = [];
 
-    let finder = /('(?!\s)[^\n\r"]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[\p{L}\p{N} ]*?(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s)[^\n\r]*? ".*?" [^\n\r]*?\p{P}(?<!"|\s)'(?![^\s\p{P}]))|('(?!\s).*'$)|('[^\s]*?')/mug;
+    // this will return a few false positives on the fifth capturing group, so it is important to eliminate basic apostrophes first
+    // there are also a few false negatives
+    let finder = /((?<=^|["\s\p{Pi}\p{Ps}])'(?:(?:[^'\n\r]|(?<=[\s\p{L}\p{N}\p{Pd}])'(?!\d\ds))*?(?<=[!,\.?:;])\S*|(?!\s)[\p{L}\p{N}\s]*|.*?[!,\.?:;\p{Pd}\p{Pf}\p{Pe}\u203D\u2048\u2049\u2E18\u00A1\u00BF])(?<!\s)'(?=$|[\p{Pf}\p{Pe}\s"]))/mug;
     let match;
     while ((match = finder.exec(text)) !== null) {
         let matchText = text.slice(match.index, finder.lastIndex);
-        //console.log ("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
+        //console.log("Match found, [%s], @ %d%s%d, lastchar[%s]", matchText, match.index, UNI_EN_DASH, finder.lastIndex, matchText[matchText.length - 1]);
         locations.push(match.index);
         if (matchText[matchText.length - 1] == "'") { locations.push(finder.lastIndex - 1); };
     }
@@ -95,6 +101,17 @@ const FindDumbApos = (text: string): number[] => {
     let locations: number[] = [];
 
     let finder = /'/ug;
+    let match;
+    while ((match = finder.exec(text)) !== null) {
+        locations.push(match.index);
+    }
+    return locations;
+};
+
+const FindBasicApos = (text: string): number[] => {
+    let locations: number[] = [];
+
+    let finder = /('(?=\d\ds[^']))|((?<=[\p{L}\p{N}])'(?=[\p{L}\p{N}]))|((?<=\s)'(?=\s))/mug;
     let match;
     while ((match = finder.exec(text)) !== null) {
         locations.push(match.index);
@@ -244,7 +261,7 @@ const FindTokensFaster = (text: string, settings: TypographySettings): Replaceme
                 location: loc,
                 resolved: isClosing, // if we are closing, we know that we are
                 length: 1,
-                lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length -1,
+                lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length - 1,
                 original: '"',
                 replacement: isClosing ? dqClose : dqOpen,
                 spanStart: !isClosing && settings.colorDoubleQuotes,
@@ -407,7 +424,7 @@ const FindTokens = (text: string, settings: TypographySettings): ReplacementToke
                     location: i,
                     resolved: isClosing, // if we are closing, we know that we are
                     length: 1,
-                    lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length -1,
+                    lengthOffset: isClosing ? dqClose.length - 1 : dqOpen.length - 1,
                     original: '"',
                     replacement: isClosing ? dqClose : dqOpen,
                     spanStart: !isClosing && settings.colorDoubleQuotes,
@@ -518,9 +535,11 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
         Anything that we determine is not appropriate, such as -- or --- following or followed
         by &gt; or &lt; can be added to rejects, which will be removed from the list
     */
-    let rejects: number[] = [];
+    let rejects: ReplacementToken[] = [];
     let sqStack: ReplacementToken[] = [];
     let sqs = FindSQs(text);
+    let bapos = FindBasicApos(text);
+
     // console.log("Resolving tokens...");
     for (var i = 0; i < tokens.length; i++) {
         let token = tokens[i];
@@ -538,7 +557,8 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
                     || (NOT_FOR_DASHES.contains(charBefore))
                     || (NOT_FOR_DASHES.contains(charAfter))) {
                     // console.log("Rejecting token.");
-                    rejects.push(i);
+                    // console.log("Rejecting dash token ", token);
+                    rejects.push(token);
                     continue;
                 }
                 if (token.replacement == UNI_EN_DASH) { // we-re dealing with an en-dash
@@ -554,16 +574,14 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
                 // the dreaded dumb apostrophe
                 // we have some quick checks to see if this is a legitimate apostrophe vs a single
                 // opening or closing quote; in these cases, we definitely have an apostrophe
-
-                if ((IsLetter(charBefore) && IsLetter(charAfter))
-                    || (IsNumber(charBefore) && IsNumber(charAfter))
-                    || (/\s/.test(charBefore) && /\s/.test(charAfter))
-                    || ((!/\p{L}|\p{P}/.test(charBefore) || charBefore == "" || /\s/.test(charBefore)) && /(?=\d\ds?)(?!\d\ds?')/gum.test(after))) {
+                if (bapos.contains(token.location)) {
+                    // console.log("Token flagged as basic apostrophe.");
+                    token.resolved = true;
                     if (!settings.apostrophes) {
-                        rejects.push(i);
+                        // console.log("Rejecting APO token ", token);
+                        rejects.push(token);
                         continue;
                     }
-                    token.resolved = true;
                     token.replacement = UNI_SINGLE_CLOSE;
                     token.spanStart = false;
                     token.spanEnd = false;
@@ -583,7 +601,9 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
                 if (!singleOpen && sqs.contains(token.location)) {
                     // console.log("Opening: [%s] [%s] [%s]", before, char, after)
                     if (!settings.singleQuotes) {
-                        rejects.push(i);
+                        // console.log("Rejecting SQO token ", token);
+                        token.resolved = true;
+                        rejects.push(token);
                         continue;
                     }
                     token.resolved = false;
@@ -599,7 +619,9 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
                 if (singleOpen && sqs.contains(token.location)) {
                     // console.log("Closing: [%s] [%s] [%s]", before, char, after)
                     if (!settings.singleQuotes) {
-                        rejects.push(i);
+                        // console.log("Rejecting SQC token ", token);
+                        token.resolved = true;
+                        rejects.push(token);
                         continue;
                     }
                     token.resolved = true;
@@ -613,12 +635,14 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
                     token.opener.closer = token;
                     continue;
                 }
+
                 // console.log("Apostrophe[%s]: [%s] [%s] [%s]", !sqs.contains(token.location), before, char, after);
+                token.resolved = true;
                 if (!settings.apostrophes) {
-                    rejects.push(i);
+                    // console.log("Rejecting final APO token ", token);
+                    rejects.push(token);
                     continue;
                 }
-                token.resolved = true;
                 token.replacement = UNI_SINGLE_CLOSE;
                 token.spanStart = false;
                 token.spanEnd = false;
@@ -627,15 +651,14 @@ const ResolveTokens = (text: string, tokens: ReplacementToken[], settings: Typog
         // console.log(token.resolved ? "Resolved token." : "Failed to resolve token", token);
     }
     for (var i = 0; i < rejects.length; i++) {
-        // console.log("Rejecting:", tokens[rejects[i]]);
-        tokens.remove(tokens[rejects[i]]);
+        // console.log("Rejecting:", rejects[i]);
+        tokens.remove(rejects[i]);
     }
-    for (var i = 0; i < tokens.length; i++) {
-        if (tokens[i].resolved) {
-            continue;
-        }
-        // console.log("Unresolved token:", tokens[i], GetContext(text, tokens[i].location, tokens[i].length, 8));
-    }
+    // for (var i = 0; i < tokens.length; i++) {
+    //     if (!tokens[i].resolved) {
+    //         console.log("Unresolved token:", tokens[i], GetContext(text, tokens[i].location, tokens[i].length, 8));
+    //     }
+    // }
 };
 
 export { FindRawText, FindTokens, ResolveTokens, FindTokensFaster };

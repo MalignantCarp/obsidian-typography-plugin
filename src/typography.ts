@@ -72,9 +72,9 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
         ResolveTokens(rawText, tokens, settings);
         //ProcessNode(el, 0, tokens, settings);
         let spanStack: HTMLElement[] = [];
+        let spanTokens: ReplacementToken[] = []
         let textOffset = 0;
         let tokenNum = 0;
-        let ignoreTags = ["pre", "code"];
         let limit = 0;
         let currentNode: Node = el;
         while (currentNode != null) {
@@ -87,16 +87,23 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
             // console.log("Obtained current node: [%s]", currentNode.outerHTML || currentNode.textContent);
             if (currentNode.nodeType == currentNode.ELEMENT_NODE) {
                 // console.log("It is an element (<%s>).", currentNode.nodeName);
+
+                if (spanTokens.length > 0) {
+                    let elementText = FindRawText(currentNode);
+                    let token = spanTokens[spanTokens.length-1];
+                    let span = spanStack[spanStack.length-1];
+                    if (token.closer.location > elementText.length + textOffset && !span.contains(currentNode)) {
+                        span.appendChild(currentNode);
+                    }
+                }
                 // we can't do anything with an element node, we need to traverse its children until we find text nodes
                 // but we want to ignore any content that might be in <pre> or <code> tags
-                if (!ignoreTags.contains(currentNode.nodeName.toLowerCase())) {
-                    if (currentNode.hasChildNodes()) {
-                        // console.log("It has children.");
-                        currentNode = currentNode.firstChild;
-                        continue;
-                    }
-                    // if there are no child nodes, we do nothing and move on
+                if (currentNode.hasChildNodes()) {
+                    // console.log("It has children.");
+                    currentNode = currentNode.firstChild;
+                    continue;
                 }
+                // if there are no child nodes, we do nothing and move on
             } else if (currentNode.nodeType == currentNode.TEXT_NODE) {
                 // console.log("It is a text node.");
                 let token = tokens[tokenNum];
@@ -151,7 +158,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                         replacementNode.replaceWith(span);
                         rNode = span; // our new rNode reference must be the span containing the text
                         // console.log(span.outerHTML);
-                        //console.log(span, span.parentNode, span.parentElement);
+                        // console.log(span, span.parentNode, span.parentElement);
                         if (splitLocation == 0) {
                             // our "current node" is the replacement node, so we need it to be amended to the span as well
                             currentNode = span;
@@ -168,15 +175,20 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                         // console.log("We have open spans.");
                         let span = spanStack[spanStack.length - 1];
                         // console.log(span.outerHTML);
-                        // console.log("Adding current node to span: %s", currentNode.textContent);
-                        // console.log(span.outerHTML);
-                        span.appendChild(currentNode);
-                        // console.log("-->", span.outerHTML);
+                        if (span.contains(currentNode)) {
+                            // console.log("Current node already in span.");
+                        } else {
+                            // console.log("Adding current node to span: %s", currentNode.textContent);
+                            // console.log(span.outerHTML);
+                            span.appendChild(currentNode);
+                            // console.log("-->", span.outerHTML);
+                        }
                     }
 
                     if (token.spanEnd && spanStack.length > 0) {
                         // console.log("Popping span off stack");
                         let span = spanStack.pop();
+                        spanTokens.pop();
                         // console.log(span.outerHTML);
                         // The span ends after and including our replacement, so the current node, with preceding content, and our
                         // replacement node (if different) needs to be added to the span
@@ -189,6 +201,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
 
                     if (token.spanStart) {
                         // if our span starts, create it, set its class, push it onto the stack
+                        spanTokens.push(token);
                         // console.log("Opening new span.");
                         let span = document.createElement("span");
                         span.className = token.spanClass;
@@ -204,10 +217,15 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                         // console.log("Pushing span.");
                         if (spanStack.length > 0) {
                             // if we are currently in a span, then this span needs to be added into the previous span
-                            spanStack[spanStack.length - 1].appendChild(span);
+                            let pSpan = spanStack[spanStack.length - 1];
+                            if (!pSpan.contains(span)) {
+                                pSpan.appendChild(span);
+                            }
                         }
                         spanStack.push(span);
-                        span.appendChild(rNode);
+                        if (!span.contains(rNode)) {
+                            span.appendChild(rNode);
+                        }
                     }
                     tokenNum++;
                 } else {
@@ -220,6 +238,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                             // console.log("Inserting current node into span.");
                             // console.log(span.outerHTML);
                             if (currentNode.parentNode.childNodes.length == 1) {
+                                // console.log("Inserting its parent node instead, as it is an only-child.");
                                 span.appendChild(currentNode.parentNode);
                             } else {
                                 span.appendChild(currentNode);
@@ -235,28 +254,28 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                 //     currentNode = spanStack[spanStack.length - 1];
                 // }
             }
-            // console.log("Current node is [%s]", currentNode.outerHTML || currentNode.textContent, "Moving to next sibling.");
-            // console.log("Main element is [%s]", el.outerHTML || el.textContent);
+            // console.log("Current node is %s=[%s]", currentNode.nodeName, currentNode.outerHTML || currentNode.textContent, "Moving to next sibling.");
+            // console.log("Main element is %s=[%s]", el.nodeName, el.outerHTML || el.textContent);
             // we have done all we can do with the current situation
             // move on to the next sibling if there isn't one, otherwise
             // we will move out to the previous parent and continue from there
-            // console.log(nodeStack);
             let sibling = currentNode.nextSibling;
-            // console.log(sibling);
             if (sibling != null) {
                 currentNode = sibling;
+                // console.log("Current node set to sibling %s=[%s]", currentNode.nodeName, currentNode.outerHTML || currentNode.textContent);
             } else {
                 currentNode = currentNode.parentNode;
-                // console.log("Sibling is null. Obtained next parent [%s]", currentNode.outerHTML || currentNode.textContent, "Testing for siblings.");
+                currentNode.normalize();
+                // console.log("Sibling is null. Obtained next parent %s=[%s]", currentNode.nodeName, currentNode.outerHTML || currentNode.textContent, "Testing for siblings.");
                 if (currentNode == el) {
-                    // console.log("Parent is top element. Done.");
+                    // console.log("Parent is top element (%s). Done.", el.nodeName);
                     currentNode = null;
                     break;
                 }
                 let sibling: Node = currentNode.nextSibling;
                 let maxLimit = 0;
                 if (sibling != null) {
-                    // console.log("Ancestor had sibling [%s]", sibling.outerHTML || sibling.textContent);
+                    // console.log("Ancestor had sibling %s=[%s]", sibling.nodeName, sibling.outerHTML || sibling.textContent);
                     currentNode = sibling;
                 } else {
                     while (currentNode != el && sibling == null) { // we don't want to get our main element's sibling
@@ -266,13 +285,13 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
                         }
                         maxLimit++;
                         currentNode = currentNode.parentNode;
-                        if (currentNode == null) {
+                        if (currentNode == null || currentNode == el) {
                             break;
                         }
-                        // console.log("Sibling is null. Obtained next parent [%s]", currentNode.outerHTML || currentNode.textContent, "Testing for siblings.");
+                        // console.log("Sibling is null. Obtained next parent %s=[%s]", currentNode.nodeName, currentNode.outerHTML || currentNode.textContent, "Testing for siblings.");
                         sibling = currentNode.nextSibling;
                         if (sibling != null) {
-                            // console.log("Ancestor had sibling [%s]", sibling.outerHTML || sibling.textContent);
+                            // console.log("Ancestor had sibling %s=[%s]", sibling.nodeName, sibling.outerHTML || sibling.textContent);
                             currentNode = sibling;
                             break;
                         } else {
