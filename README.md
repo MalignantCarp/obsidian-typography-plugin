@@ -23,7 +23,7 @@ The plugin also allows for highlighting of double and single quoted blocks, incl
 
 ## Known Issues / Limitations
  - Some single quote blocks end prematurely due to apostrophes that are placed after a word (plural possessive or contractions e.g., runnin').
- - Styling or quotation blocks is incorrect if other style information begins inside but ends outside or begins outside and ends inside that quotation block.
+ - Styling of quotation blocks is incorrect if other style information begins inside but ends outside or begins outside and ends inside that quotation block.
 
 ## Installation
 Right now, this is not in Community Plugins, so you will want to use Obsidian BRAT to install, or manually download the release and install it in your vault's .obsidian folder in plugins/obsidian-typography-plugin.
