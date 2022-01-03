@@ -1,3 +1,6 @@
+# 2021-01-03 v0.0.8
+ - Fixed an uncaught exception in Typography.ts line 95. `token.closer.location` accessed when `token.closer` is `null`; confirm it is `!null` first.
+
 # 2021-01-02 v0.0.7
  - Fixed issues #10 and #11 (though not likely the last time we'll see a style-related issue).
  - Further refined single quote regex to better determine single quote blocks. A quick rule of thumb for this is that as soon as you bring in any punctuation beyond dashes and the occasional apostrophe, there is an expectation that the single quote block follows proper grammar and will end with a piece of punctuation such as a period or comma.
