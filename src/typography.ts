@@ -72,7 +72,7 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
         ResolveTokens(rawText, tokens, settings);
         //ProcessNode(el, 0, tokens, settings);
         let spanStack: HTMLElement[] = [];
-        let spanTokens: ReplacementToken[] = []
+        let spanTokens: ReplacementToken[] = [];
         let textOffset = 0;
         let tokenNum = 0;
         let limit = 0;
@@ -90,8 +90,8 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
 
                 if (spanTokens.length > 0) {
                     let elementText = FindRawText(currentNode);
-                    let token = spanTokens[spanTokens.length-1];
-                    let span = spanStack[spanStack.length-1];
+                    let token = spanTokens[spanTokens.length - 1];
+                    let span = spanStack[spanStack.length - 1];
                     if (token.closer != null && token.closer.location > elementText.length + textOffset && !span.contains(currentNode)) {
                         span.appendChild(currentNode);
                     }
@@ -316,19 +316,23 @@ const ProcessElement = (el: HTMLElement, settings: TypographySettings) => {
 const Typography = (el: HTMLElement, settings: TypographySettings) => {
     // We need to run this on certain tags: h*, p, etc.
     for (var i = 1; i <= 6; i++) {
-        var levelHeaders = Array.from(el.getElementsByTagName('h' + i));
+        let levelHeaders = Array.from(el.getElementsByTagName(`h${i}`)) as HTMLElement[];
         for (var j = 0; j < levelHeaders.length; j++) {
-            ProcessElement(<HTMLElement>levelHeaders[j], settings);
+            ProcessElement(levelHeaders[j], settings);
         }
     }
     let elements: HTMLElement[] = [];
     elements = Array.from(el.getElementsByTagName('p'));
     for (var i = 0; i < elements.length; i++) {
-        ProcessElement(<HTMLElement>elements[i], settings);
+        ProcessElement(elements[i], settings);
     }
     elements = Array.from(el.getElementsByTagName('li'));
     for (var i = 0; i < elements.length; i++) {
-        ProcessElement(<HTMLElement>elements[i], settings);
+        ProcessElement(elements[i], settings);
+    }
+    elements = Array.from(el.getElementsByClassName('callout-title-inner')) as HTMLElement[];
+    for (var i = 0; i < elements.length; i++) {
+        ProcessElement(elements[i], settings);
     }
 
 };

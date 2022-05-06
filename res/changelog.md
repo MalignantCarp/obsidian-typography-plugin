@@ -1,13 +1,17 @@
-# 2021-01-03 v0.0.8
+# 2022-05-06 v0.0.9
+ - (Corrected dates in changelog)
+ - Fixed #12 - Typography ignored in Callout Titles
+
+# 2022-01-03 v0.0.8
  - Fixed an uncaught exception in Typography.ts line 95. `token.closer.location` accessed when `token.closer` is `null`; confirm it is `!null` first.
 
-# 2021-01-02 v0.0.7
+# 2022-01-02 v0.0.7
  - Fixed issues #10 and #11 (though not likely the last time we'll see a style-related issue).
  - Further refined single quote regex to better determine single quote blocks. A quick rule of thumb for this is that as soon as you bring in any punctuation beyond dashes and the occasional apostrophe, there is an expectation that the single quote block follows proper grammar and will end with a piece of punctuation such as a period or comma.
  - Fixed the way `<code>` and `<pre>` blocks are handled so they no longer cause trouble.
  - Fixed the way certain typography elements are handled so that disabling them doesn't cause trouble with other elements (most notably when disabling apostrophes but not single quotes and vice versa).
 
-# 2021-01-01 v0.0.6
+# 2022-01-01 v0.0.6
  - New HTML Parser that navigates the DOM to handle replacement and styling (where desired).
  - The above fixes for #7 and #8 and achieves #3.
  - New Regex for determining single quotes (though the replacement system still seems to fail in certain cases where single quotes are disabled but apostrophes are enabled). Still not satisfied enough to mark #2 complete.
